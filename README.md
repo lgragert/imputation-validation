@@ -204,8 +204,18 @@ To create the input files needed for the Python module:
 2) Do a weighted choice draw from the haplotype pair probability distribution to select a “true” high resolution multilocus unphased genotype.
 
 
+## National Kidney Registry (NKR) Dataset
+
+50K high resolution typings in kidney transplant setting.
+
+Roll back HLA typing to antigen level to simulate how data would appear in SRTR then reimpute.
+
+TODO - Get LG onto IRB to gain access to NKR data, then run imputation on NYU cluster.
+
+
 ## NMDP confirmatory typing validation datasets
 
 Mostly stem cell donors with their initial recruitment typing and their true high resolution HLA typing, typically a customized typing confirmatory typing ordered on behalf of a searching patient. There are also some random prospective high resolution typings. 
 
-TODO - Need to request dataset from Martin Maiers at NMDP. This is a large dataset (>>100,000 test cases).
+TODO - Need a DUA to request dataset from Martin Maiers at NMDP. This is a large dataset (>>100,000 test cases) in stem cell transplant setting.
+
