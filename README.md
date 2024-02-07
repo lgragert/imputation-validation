@@ -17,7 +17,7 @@ The objective is to write a Python script/module that computes imputation perfor
 	1) Start with single-locus HLA genotype, by locus. Start with just A, B, C, DRB1, DQB1.
 	2) After you have program working, add tests for DRB3/4/5, DQA1, DPA1, DPB1, the whole multi-locus unphased genotype and then by amino acid position, then by eplet.
 2) Assign the true positive, false positive, true negative, false negative cases for the category based on the most probable multilocus unphased genotype. Use a probability threshold for positive vs negative predictions of 50%. The truth is binary - either the high resolution genotype was correct or it was not - all alleles have to be correct. 
-3) Compute predictions performance metrics using scikit-learn functions.
+3) Compute prediction performance metrics using scikit-learn functions.
 
 
 ### Imputation output format:
