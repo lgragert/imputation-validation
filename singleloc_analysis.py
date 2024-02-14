@@ -59,7 +59,9 @@ truth_table = pd.read_csv(truth_filename, header=0)
 impute = pd.read_csv(impute_filename, header=0)
 
 truth_table = truth_table.drop_duplicates(subset=['ID'])  # TODO - bring this over to clean data script
-truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)
+truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)  # Makes sure they are the same length and looking at the same patients
+truth_table = truth_table.sort_values(by=['ID']).reset_index(drop=True)  # Sorts the patients, so each patient is in the same row as the imputation rows
+impute = impute.sort_values(by=['ID']).reset_index(drop=True)
 
 high_res = False
 truth_table = sep_glstring(truth_table, high_res)
