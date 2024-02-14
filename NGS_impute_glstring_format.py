@@ -117,6 +117,9 @@ for pop in pops:
         else:
             multiloc_freq[subject_id][happair] = multiloc_freq[subject_id][happair] + happair_freq
 
+# TODO - Add more columns with most probable genotype per locus and the probability
+# The most probable genotype at a locus might be different than what was in the multilocus genotype
+# Expect many of the false negatives to become true positives
 
 # Get top impute with the new multilocus frequency
 top_impute = pd.DataFrame()
