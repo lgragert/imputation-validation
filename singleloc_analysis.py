@@ -13,9 +13,13 @@ ard = pyard.init("3520")
 
 
 # Separate the GLString out into locus pairings
-def sep_glstring(file, high_res):
-    file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
-    file = file.drop(columns=['GLString'])
+def sep_glstring(file, high_res, glstring):
+    if glstring == 'GLString':
+        file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
+        file = file.drop(columns=['GLString'])
+    else:
+        file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
+        file = file.drop(columns=['SLUG_GLString', 'MUG_GLString', 'HapPair_Prob'])
 
     loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
     for locus in loci:
@@ -30,26 +34,27 @@ def sep_glstring(file, high_res):
 
 # Count the number of incorrect predictions and then make it in terms that we use to make negative(-1) and positive(1) predictions
 def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
-    if (truth_typ1 == "MISSING"):
+    if truth_typ1 == "MISSING":
         return "NA"
-    if (impute_typ1 == "MISSING"):
+    if impute_typ1 == "MISSING":
         return "NA"
 
     # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
-    # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2) 
+    # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
 
+    # Cannot assume they are in exact order, so create a count of negative predictions
     donor_homoz = 0
-    if (truth_typ1 == truth_typ2):
+    if truth_typ1 == truth_typ2:
         donor_homoz = 1
 
     neg_count = 0
-    if ((truth_typ1 != impute_typ1) & (truth_typ1 != impute_typ2)):
+    if (truth_typ1 != impute_typ1) & (truth_typ1 != impute_typ2):
         neg_count += 1
 
-    if ((truth_typ2 != impute_typ1) & (truth_typ2 != impute_typ2)):
+    if (truth_typ2 != impute_typ1) & (truth_typ2 != impute_typ2):
         neg_count += 1
 
-    if ((neg_count == 2) & (donor_homoz == 1)):
+    if (neg_count == 2) & (donor_homoz == 1):
         neg_count = 1
 
     # Want to make it to where 1=correct prediction and -1=incorrect prediction
@@ -60,12 +65,12 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
 
     return neg_count
 
+
 truth_filename = 'genotype_truth_table.csv'
 impute_filename = 'lowres_topprob_impute.csv'
 truth_table = pd.read_csv(truth_filename, header=0)
 impute = pd.read_csv(impute_filename, header=0)
 
-truth_table = truth_table.drop_duplicates(subset=['ID'])  # TODO - bring this over to clean data script
 truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)  # Makes sure they are the same length and looking at the same patients
 truth_table = truth_table.sort_values(by=['ID']).reset_index(drop=True)  # Sorts the patients, so each patient is in the same row as the imputation rows
 impute = impute.sort_values(by=['ID']).reset_index(drop=True)
@@ -73,8 +78,8 @@ impute = impute.sort_values(by=['ID']).reset_index(drop=True)
 # print (truth_table)
 
 high_res = False
-truth_table = sep_glstring(truth_table, high_res)
-impute = sep_glstring(impute, high_res)
+truth_table = sep_glstring(truth_table, high_res, 'GLString')
+impute = sep_glstring(impute, high_res, 'SLUG_GLString')
 
 if high_res == False:
     loci = ['A', 'B', 'C', 'DRB1', 'DQB1']
@@ -99,21 +104,34 @@ for line in range(len(truth_table)):
         impute.loc[line, locus + '_True'] = neg_prediction(truth1, truth2, impute1, impute2)
 
         # Create column for the probability taken from the probability
-        probability = impute.loc[line, 'HapPair_Prob']
+        probability = impute.loc[line, 'GENO_' + locus + '_Prob']
         if probability >= 0.5:
-            impute.loc[line, 'Prob'] = 1
+            impute.loc[line, locus + '_Prob'] = 1
         else:
-            impute.loc[line, 'Prob'] = -1
+            impute.loc[line, locus + '_Prob'] = -1
 
-probability = impute['HapPair_Prob'].to_numpy()
-probs = impute['Prob'].to_numpy()
+
+confusion_mat = pd.DataFrame()
 for locus in loci:
+    # Need everything to be in numpy array for sklearn metrics
+    probs = impute[locus + '_Prob'].to_numpy()                  # Probability of correctness in terms of -1/1
+    probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in [0,1] terms
+    true_pred = impute[locus + '_True'].to_numpy()              # Actual prediction in terms of -1/1
+
+    # Confusion Matrix per Locus
     print('Confusion Matrix for Locus: ', locus)
-    true_pred = impute[locus + '_True'].to_numpy()
     print(confusion_matrix(true_pred, probs))
     tn, fp, fn, tp = confusion_matrix(true_pred, probs).ravel()
     print('TP: ' + str(tp) + ', TN: ' + str(tn) + ', FP: ' + str(fp) + ', FN: ' + str(fn))
-    print(classification_report(true_pred, probs))
-    print('Brier Score Loss: ', brier_score_loss(true_pred, probability > 0.5))
-    print('ROC-AUC Score: ', roc_auc_score(true_pred, probs))
 
+    confusion_mat_line = pd.DataFrame({'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp}, index=[locus])
+    confusion_mat = pd.concat([confusion_mat, confusion_mat_line])
+
+    # Classification Report
+    print(classification_report(true_pred, probs))
+
+    # Brier Score Loss
+    print('Brier Score Loss: ', brier_score_loss(true_pred, probability > 0.5))
+
+    # ROC-AUC Score
+    print('ROC-AUC Score: ', roc_auc_score(true_pred, probs))
