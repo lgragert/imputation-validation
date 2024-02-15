@@ -2,10 +2,10 @@
 import pandas as pd
 import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, RocCurveDisplay
+from sklearn.calibration import CalibratedClassifierCV, CalibrationDisplay, calibration_curve
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import pyard
-
-
 ard = pyard.init("3520")
 
 # Compare the imputation to the truth table for single locus unphased genotype analysis
@@ -59,7 +59,7 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
 
     # Want to make it to where 1=correct prediction and -1=incorrect prediction
     if neg_count >= 1:
-        neg_count = -1
+        neg_count = 0
     else:
         neg_count = 1
 
@@ -105,13 +105,16 @@ for line in range(len(truth_table)):
 
         # Create column for the probability taken from the probability
         probability = impute.loc[line, 'GENO_' + locus + '_Prob']
-        if probability >= 0.5:
+        threshold = 0.95
+        if probability > threshold:
             impute.loc[line, locus + '_Prob'] = 1
         else:
-            impute.loc[line, locus + '_Prob'] = -1
+            impute.loc[line, locus + '_Prob'] = 0
 
 
 confusion_mat = pd.DataFrame()
+brier_loss = {}
+roc_auc = {}
 for locus in loci:
     # Need everything to be in numpy array for sklearn metrics
     probs = impute[locus + '_Prob'].to_numpy()                  # Probability of correctness in terms of -1/1
@@ -131,7 +134,42 @@ for locus in loci:
     print(classification_report(true_pred, probs))
 
     # Brier Score Loss
-    print('Brier Score Loss: ', brier_score_loss(true_pred, probability > 0.5))
+    brier_loss[locus] = brier_score_loss(true_pred, probability > threshold)
+    print('Brier Score Loss: ', brier_loss[locus])
 
     # ROC-AUC Score
-    print('ROC-AUC Score: ', roc_auc_score(true_pred, probs))
+    roc_auc[locus] = roc_auc_score(true_pred, probability)
+    print('ROC-AUC Score: ', roc_auc[locus])
+
+    # Sort the Dataset based on low to high predictions and create four points
+    impute_sort = impute.sort_values(by=['GENO_' + locus + '_Prob'])
+    sort_probability = impute_sort['GENO_' + locus + '_Prob'].to_numpy()
+    sort_true_pred = impute_sort[locus + '_True'].sort_values().to_numpy()
+    # Create four points by taking the average in each bin
+    prob1,prob2,prob3,prob4 = np.array_split(sort_probability, 4)
+    true1,true2,true3,true4 = np.array_split(sort_true_pred, 4)
+    probability_avg = [prob1.mean(), prob2.mean(), prob3.mean(), prob4.mean()]
+    min_prob = np.min(probability_avg)
+    true_avg = [true1.mean(), true2.mean(), true3.mean(), true4.mean()]
+    min_true = np.min(true_avg)
+
+    plt.figure(figsize=(8, 8))
+    plt.plot(probability_avg, true_avg, marker='o', linestyle='-', label='Calibration Curve')
+    plt.plot([0, 1], linestyle='--', label='Ideal Calibration')
+    plt.xlabel('Mean Predicted Probability for ' + locus)
+    plt.ylabel('Fraction of Predictions Correct')
+    plt.title('Probability Calibration Curve for ' + locus)
+    plt.legend()
+    plt.show()
+
+    RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
+    plt.title('ROC-AUC for ' + locus)
+    plt.show()
+
+
+bf = pd.DataFrame({'Brier_Loss_Score': brier_loss}, index=brier_loss.keys())
+ra = pd.DataFrame({'ROC-AUC': roc_auc}, index=roc_auc.keys())
+confusion_mat = pd.concat([confusion_mat, bf], axis=1)
+confusion_mat = pd.concat([confusion_mat, ra], axis=1)
+print(confusion_mat)
+
