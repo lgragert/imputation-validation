@@ -141,10 +141,10 @@ for locus in loci:
     roc_auc[locus] = roc_auc_score(true_pred, probability)
     print('ROC-AUC Score: ', roc_auc[locus])
 
-    # Sort the Dataset based on low to high predictions and create four equal sized bins
+    # Sort the Dataset based on probabilities to allow the low/high probabilities to be together in the split
     impute_sort = impute.sort_values(by=['GENO_' + locus + '_Prob'])
     sort_probability = impute_sort['GENO_' + locus + '_Prob'].to_numpy()
-    sort_true_pred = impute_sort[locus + '_True'].sort_values().to_numpy()
+    sort_true_pred = impute_sort[locus + '_True'].to_numpy()
 
     # Create four points by taking the average in each bin
     n_bins = 4
@@ -164,21 +164,29 @@ for locus in loci:
     print (",".join([locus,"Q3",str(round(probability_avg[2],4)),str(round(true_avg[2],4)),str(round(min_prob_in_bin[2],4)),str(round(max_prob_in_bin[2],4))]))
     print (",".join([locus,"Q4",str(round(probability_avg[3],4)),str(round(true_avg[3],4)),str(round(min_prob_in_bin[3],4)),str(round(max_prob_in_bin[3],4))]))
 
-    plt.figure(figsize=(8, 8))
-    plt.plot(true_avg, probability_avg, marker='o', linestyle='-', label='Calibration Curve')
-    plt.plot([0, 1], linestyle='--', label='Ideal Calibration')
-    plt.ylabel('Mean Predicted Probability within Quartile for ' + locus)
-    plt.xlabel('Fraction of Predictions Correct')
+    # Create a bar plot where it shows the distribution of predictions, have to separate it from plot so it does not get added in
+    counts, bins, _ = plt.hist(sort_probability, bins=20)
+    num_IDs = len(impute)
+    fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
+
+    calibrat_plot = plt.figure(figsize=(8, 8))
+    calibrat_plot = plt.plot(true_avg, probability_avg, marker='o', linestyle='', label='Calibration Curve')
+    calibrat_plot = plt.plot([0, 1], linestyle='--', label='Ideal Calibration')
+    calibrat_plot = plt.ylabel('Mean Predicted Probability within Quartile for ' + locus)
+    calibrat_plot = plt.xlabel('Fraction of Predictions Correct')
     # plt.yscale('log')
     # plt.xscale('log')
-    plt.title('Probability Calibration for ' + locus + " Locus")
-    plt.legend()
-    plt.savefig("Calibration_" + locus + ".png", bbox_inches='tight')
+    calibrat_plot = plt.title('Probability Calibration for ' + locus + " Locus")
+    calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='blue')
+    calibrat_plot = plt.xlim(0,1.05)
+    calibrat_plot = plt.ylim(0,1.05)
+    calibrat_plot = plt.legend()
+    calibrat_plot = plt.savefig("Calibration_" + locus + ".png", bbox_inches='tight')
     # plt.show()
 
-    RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
-    plt.title('ROC Curve and AUC for ' + locus)
-    plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
+    roc_plot = RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
+    roc_plot = plt.title('ROC Curve and AUC for ' + locus)
+    roc_plot = plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
     # plt.show()
 
 
