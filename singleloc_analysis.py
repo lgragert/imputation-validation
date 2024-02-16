@@ -9,7 +9,7 @@ import pyard
 ard = pyard.init("3520")
 
 # Compare the imputation to the truth table for single locus unphased genotype analysis
-# If both alleles are the same, then that is a positive prediction=1, and if one/both are incorrect then that is a negative prediction=-1
+# If both alleles are the same, then that is a positive prediction=1, and if one/both are incorrect then that is a negative prediction=0
 
 
 # Separate the GLString out into locus pairings
@@ -29,39 +29,21 @@ def sep_glstring(file, high_res, glstring):
     # If your genotype truth table is not actually high resolution, then drop DPA1 and DPB1
     if high_res is False:
         file = file.drop(columns=['DRB345_1', 'DRB345_2', 'DQA1_1', 'DQA1_2', 'DPA1_1', 'DPA1_2', 'DPB1_1', 'DPB1_2'])
+
     return file
 
 
-# Count the number of incorrect predictions and then make it in terms that we use to make negative(-1) and positive(1) predictions
+# Count the number of incorrect predictions and then make it in terms that we use to make negative(0) and positive(1) predictions
 def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
-    if truth_typ1 == "MISSING":
+    if truth_typ2 == "MISSING":
         return "NA"
-    if impute_typ1 == "MISSING":
+    if impute_typ2 == "MISSING":
         return "NA"
 
-    # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
-    # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
-
-    # Cannot assume they are in exact order, so create a count of negative predictions
-    donor_homoz = 0
-    if truth_typ1 == truth_typ2:
-        donor_homoz = 1
-
-    neg_count = 0
-    if (truth_typ1 != impute_typ1) & (truth_typ1 != impute_typ2):
-        neg_count += 1
-
-    if (truth_typ2 != impute_typ1) & (truth_typ2 != impute_typ2):
-        neg_count += 1
-
-    if (neg_count == 2) & (donor_homoz == 1):
+    if (truth_typ1 == impute_typ1) & (truth_typ2 == impute_typ2):
         neg_count = 1
-
-    # Want to make it to where 1=correct prediction and -1=incorrect prediction
-    if neg_count >= 1:
-        neg_count = 0
     else:
-        neg_count = 1
+        neg_count = 0
 
     return neg_count
 
@@ -77,7 +59,7 @@ impute = impute.sort_values(by=['ID']).reset_index(drop=True)
 
 # print (truth_table)
 
-high_res = False
+high_res = True
 truth_table = sep_glstring(truth_table, high_res, 'GLString')
 impute = sep_glstring(impute, high_res, 'SLUG_GLString')
 
@@ -93,20 +75,35 @@ for line in range(len(truth_table)):
         truth2 = truth_table.loc[line, locus + '_2']
         (truth1, truth2) = sorted([truth1, truth2])
 
-        # py-ARD lgx rollup on truth
-        truth1 = ard.redux(truth1,'lgx')
-        truth2 = ard.redux(truth2,'lgx')
-
         impute1 = impute.loc[line, locus + '_1']
         impute2 = impute.loc[line, locus + '_2']
         (impute1, impute2) = sorted([impute1, impute2])
+
+        # py-ARD lgx rollup on truth
+        if truth1 == 'DRBX*NNNN':
+            truth1 = 'DRBX*NNNN'
+        elif truth1 == 'DPB1*NEW':
+            truth1 = 'DPB1*NEW'
+        elif truth1 == 'DQA1*NEW':
+            truth1 = 'DQA1*NEW'
+        else:
+            truth1 = ard.redux(truth1, 'lgx')
+
+        if truth2 == 'DRBX*NNNN':
+            truth2 = 'DRBX*NNNN'
+        elif truth2 == 'DPB1*NEW':
+            truth2 = 'DPB1*NEW'
+        elif truth2 == 'DQA1*NEW':
+            truth2 = 'DQA1*NEW'
+        else:
+            truth2 = ard.redux(truth2,'lgx')
 
         impute.loc[line, locus + '_True'] = neg_prediction(truth1, truth2, impute1, impute2)
 
         # Create column for the probability taken from the probability
         probability = impute.loc[line, 'GENO_' + locus + '_Prob']
         threshold = 0.95
-        if probability > threshold:
+        if probability >= threshold:
             impute.loc[line, locus + '_Prob'] = 1
         else:
             impute.loc[line, locus + '_Prob'] = 0
@@ -158,11 +155,18 @@ for locus in loci:
     true_avg = [true_q1.mean(), true_q2.mean(), true_q3.mean(), true_q4.mean()]
     min_true = np.min(true_avg)
 
-    print ("Locus,Quantile,Prob_Avg,True_Fraction,Min_Prob,Max_Prob\n")
+    print ("Locus,Quartile,Prob_Avg,True_Fraction,Min_Prob,Max_Prob\n")
     print (",".join([locus,"Q1",str(round(probability_avg[0],4)),str(round(true_avg[0],4)),str(round(min_prob_in_bin[0],4)),str(round(max_prob_in_bin[0],4))]))
     print (",".join([locus,"Q2",str(round(probability_avg[1],4)),str(round(true_avg[1],4)),str(round(min_prob_in_bin[1],4)),str(round(max_prob_in_bin[1],4))]))
     print (",".join([locus,"Q3",str(round(probability_avg[2],4)),str(round(true_avg[2],4)),str(round(min_prob_in_bin[2],4)),str(round(max_prob_in_bin[2],4))]))
     print (",".join([locus,"Q4",str(round(probability_avg[3],4)),str(round(true_avg[3],4)),str(round(min_prob_in_bin[3],4)),str(round(max_prob_in_bin[3],4))]))
+
+    # Create a table exactly like the print statements above to add to the bottom of the calibration plot
+    table_data = [["Quartile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob"],
+                  ['Q1', str(round(probability_avg[0], 4)), str(round(true_avg[0], 4)), str(round(min_prob_in_bin[0], 4)), str(round(max_prob_in_bin[0], 4))],
+                  ['Q2', str(round(probability_avg[1], 4)), str(round(true_avg[1], 4)), str(round(min_prob_in_bin[1], 4)), str(round(max_prob_in_bin[1], 4))],
+                  ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4))],
+                  ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4))]]
 
     # Create a bar plot where it shows the distribution of predictions, have to separate it from plot so it does not get added in
     counts, bins, _ = plt.hist(sort_probability, bins=20)
@@ -170,21 +174,22 @@ for locus in loci:
     fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
 
     calibrat_plot = plt.figure(figsize=(8, 8))
-    calibrat_plot = plt.plot(probability_avg, true_avg, marker='o', linestyle='', label='Calibration Curve')
-    calibrat_plot = plt.plot([0,1], [0,1], linestyle='--', label='Ideal Calibration')
-    calibrat_plot = plt.xlabel('Mean Predicted Probability within Quartile for ' + locus)
+    calibrat_plot = plt.plot(probability_avg, true_avg, marker='o', linestyle='', label='Calibration Curve', color='red')
+    calibrat_plot = plt.plot([0,1], [0,1], linestyle='--', label='Ideal Calibration', color='blue')
+    # calibrat_plot = plt.xlabel('Mean Predicted Probability within Quartile for ' + locus)
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
     # plt.yscale('log')
     # plt.xscale('log')
-    calibrat_plot = plt.title('Probability Calibration for ' + locus + " Locus")
-    calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='blue')
+    calibrat_plot = plt.title('Probability Calibration Curve for HLA-' + locus + " Locus")
+    calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='grey')
     calibrat_plot = plt.xlim(0,1.05)
     calibrat_plot = plt.ylim(0,1.05)
+    table = plt.table(cellText=table_data)
+    ax = plt.gca()
+    ax.get_xaxis().set_visible(False)
     calibrat_plot = plt.legend()
     calibrat_plot = plt.savefig("Calibration_" + locus + ".png", bbox_inches='tight')
     # plt.show()
-
-    # Create a table
 
     # Display ROC plots
     # TODO - create a plot with multiple ROCs on one plot
