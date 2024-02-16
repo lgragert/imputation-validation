@@ -173,19 +173,12 @@ for locus in loci:
     true_avg = [true_q1.mean(), true_q2.mean(), true_q3.mean(), true_q4.mean()]
     min_true = np.min(true_avg)
 
-    print ("Locus,Quartile,Prob_Avg,True_Fraction,Min_Prob,Max_Prob\n")
-    print (",".join([locus,"Q1",str(round(probability_avg[0],4)),str(round(true_avg[0],4)),str(round(min_prob_in_bin[0],4)),str(round(max_prob_in_bin[0],4))]))
-    print (",".join([locus,"Q2",str(round(probability_avg[1],4)),str(round(true_avg[1],4)),str(round(min_prob_in_bin[1],4)),str(round(max_prob_in_bin[1],4))]))
-    print (",".join([locus,"Q3",str(round(probability_avg[2],4)),str(round(true_avg[2],4)),str(round(min_prob_in_bin[2],4)),str(round(max_prob_in_bin[2],4))]))
-    print (",".join([locus,"Q4",str(round(probability_avg[3],4)),str(round(true_avg[3],4)),str(round(min_prob_in_bin[3],4)),str(round(max_prob_in_bin[3],4))]))
-
     # Create the standard error bars for each point
     snd_err1 = np.std(prob_q1, ddof=1) / np.sqrt(np.size(prob_q1))
     snd_err2 = np.std(prob_q2, ddof=1) / np.sqrt(np.size(prob_q2))
     snd_err3 = np.std(prob_q3, ddof=1) / np.sqrt(np.size(prob_q3))
     snd_err4 = np.std(prob_q4, ddof=1) / np.sqrt(np.size(prob_q4))
     snd_err = [snd_err1, snd_err2, snd_err3, snd_err4]
-    print('Standard Error for each Quartile for ' + locus + ': \n' + str(snd_err))
 
     # Create a table exactly like the print statements above to add to the bottom of the calibration plot
     table_data = [["Quartile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"],
@@ -194,13 +187,19 @@ for locus in loci:
                   ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4)), str(round(snd_err3, 4))],
                   ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4)), str(round(snd_err4, 4))]]
 
+    print(table_data[0])
+    print(table_data[1])
+    print(table_data[2])
+    print(table_data[3])
+    print(table_data[4])
+
     # Create a bar plot where it shows the distribution of predictions, have to separate it from plot so it does not get added in
     counts, bins, _ = plt.hist(sort_probability, bins=20)
     num_IDs = len(impute)
     fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
 
     calibrat_plot = plt.figure(figsize=(8, 8))
-    calibrat_plot = plt.errorbar(probability_avg, true_avg, yerr=snd_err, marker='o', linestyle='', label='True fraction vs probability average for quartile', color='red', ecolor='black', capsize=7)
+    calibrat_plot = plt.errorbar(probability_avg, true_avg, yerr=snd_err, marker='o', linestyle='', label='True Fraction vs Probability Average for Quartile', color='red', ecolor='black', capsize=7)
     calibrat_plot = plt.plot([0,1], linestyle='--', label='Ideal Calibration', color='blue')
     # calibrat_plot = plt.xlabel('Mean Predicted Probability within Quartile for ' + locus)
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
