@@ -141,30 +141,45 @@ for locus in loci:
     roc_auc[locus] = roc_auc_score(true_pred, probability)
     print('ROC-AUC Score: ', roc_auc[locus])
 
-    # Sort the Dataset based on low to high predictions and create four points
+    # Sort the Dataset based on low to high predictions and create four equal sized bins
     impute_sort = impute.sort_values(by=['GENO_' + locus + '_Prob'])
     sort_probability = impute_sort['GENO_' + locus + '_Prob'].to_numpy()
     sort_true_pred = impute_sort[locus + '_True'].sort_values().to_numpy()
+
     # Create four points by taking the average in each bin
-    prob1,prob2,prob3,prob4 = np.array_split(sort_probability, 4)
-    true1,true2,true3,true4 = np.array_split(sort_true_pred, 4)
-    probability_avg = [prob1.mean(), prob2.mean(), prob3.mean(), prob4.mean()]
+    n_bins = 4
+    prob_q1,prob_q2,prob_q3,prob_q4 = np.array_split(sort_probability, n_bins)
+    true_q1,true_q2,true_q3,true_q4 = np.array_split(sort_true_pred, n_bins)
+    probability_avg = [prob_q1.mean(), prob_q2.mean(), prob_q3.mean(), prob_q4.mean()]
     min_prob = np.min(probability_avg)
-    true_avg = [true1.mean(), true2.mean(), true3.mean(), true4.mean()]
+    max_prob = np.max(probability_avg)
+    min_prob_in_bin = [np.min(prob_q1), np.min(prob_q2), np.min(prob_q3), np.min(prob_q4)]
+    max_prob_in_bin = [np.max(prob_q1), np.max(prob_q2), np.max(prob_q3), np.max(prob_q4)]
+    true_avg = [true_q1.mean(), true_q2.mean(), true_q3.mean(), true_q4.mean()]
     min_true = np.min(true_avg)
 
+    print ("Locus,Quantile,Prob_Avg,True_Fraction,Min_Prob,Max_Prob\n")
+    print (",".join([locus,"Q1",str(round(probability_avg[0],4)),str(round(true_avg[0],4)),str(round(min_prob_in_bin[0],4)),str(round(max_prob_in_bin[0],4))]))
+    print (",".join([locus,"Q2",str(round(probability_avg[1],4)),str(round(true_avg[1],4)),str(round(min_prob_in_bin[1],4)),str(round(max_prob_in_bin[1],4))]))
+    print (",".join([locus,"Q3",str(round(probability_avg[2],4)),str(round(true_avg[2],4)),str(round(min_prob_in_bin[2],4)),str(round(max_prob_in_bin[2],4))]))
+    print (",".join([locus,"Q4",str(round(probability_avg[3],4)),str(round(true_avg[3],4)),str(round(min_prob_in_bin[3],4)),str(round(max_prob_in_bin[3],4))]))
+
     plt.figure(figsize=(8, 8))
-    plt.plot(probability_avg, true_avg, marker='o', linestyle='-', label='Calibration Curve')
+    plt.plot(true_avg, probability_avg, marker='o', linestyle='-', label='Calibration Curve')
     plt.plot([0, 1], linestyle='--', label='Ideal Calibration')
-    plt.xlabel('Mean Predicted Probability for ' + locus)
-    plt.ylabel('Fraction of Predictions Correct')
-    plt.title('Probability Calibration Curve for ' + locus)
+    plt.ylabel('Mean Predicted Probability within Quartile for ' + locus)
+    plt.xlabel('Fraction of Predictions Correct')
+    # plt.yscale('log')
+    # plt.xscale('log')
+    plt.title('Probability Calibration for ' + locus + " Locus")
     plt.legend()
-    plt.show()
+    plt.savefig("Calibration_" + locus + ".png", bbox_inches='tight')
+    # plt.show()
 
     RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
-    plt.title('ROC-AUC for ' + locus)
-    plt.show()
+    plt.title('ROC Curve and AUC for ' + locus)
+    plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
+    # plt.show()
 
 
 bf = pd.DataFrame({'Brier_Loss_Score': brier_loss}, index=brier_loss.keys())
