@@ -35,18 +35,36 @@ def sep_glstring(file, high_res, glstring):
 
 # Count the number of incorrect predictions and then make it in terms that we use to make negative(0) and positive(1) predictions
 def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
-    if truth_typ2 == "MISSING":
+    if truth_typ1 == "MISSING":
         return "NA"
-    if impute_typ2 == "MISSING":
+    if impute_typ1 == "MISSING":
         return "NA"
+    # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
+    # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
 
     if (truth_typ1 == impute_typ1) & (truth_typ2 == impute_typ2):
         neg_count = 1
     else:
         neg_count = 0
 
-    return neg_count
+    # # Cannot assume they are in exact order, so create a count of negative predictions
+    # donor_homoz = 0
+    # if truth_typ1 == truth_typ2:
+    #     donor_homoz = 1
+    # neg_count = 0
+    # if (truth_typ1 != impute_typ1) & (truth_typ1 != impute_typ2):
+    #     neg_count += 1
+    # if (truth_typ2 != impute_typ1) & (truth_typ2 != impute_typ2):
+    #     neg_count += 1
+    # if (neg_count == 2) & (donor_homoz == 1):
+    #     neg_count = 1
+    # # Want to make it to where 1=correct prediction and -0=incorrect prediction
+    # if neg_count >= 1:
+    #     neg_count = 0
+    # else:
+    #     neg_count = 1
 
+    return neg_count
 
 truth_filename = 'genotype_truth_table.csv'
 impute_filename = 'lowres_topprob_impute.csv'
@@ -161,12 +179,20 @@ for locus in loci:
     print (",".join([locus,"Q3",str(round(probability_avg[2],4)),str(round(true_avg[2],4)),str(round(min_prob_in_bin[2],4)),str(round(max_prob_in_bin[2],4))]))
     print (",".join([locus,"Q4",str(round(probability_avg[3],4)),str(round(true_avg[3],4)),str(round(min_prob_in_bin[3],4)),str(round(max_prob_in_bin[3],4))]))
 
+    # Create the standard error bars for each point
+    snd_err1 = np.std(prob_q1, ddof=1) / np.sqrt(np.size(prob_q1))
+    snd_err2 = np.std(prob_q2, ddof=1) / np.sqrt(np.size(prob_q2))
+    snd_err3 = np.std(prob_q3, ddof=1) / np.sqrt(np.size(prob_q3))
+    snd_err4 = np.std(prob_q4, ddof=1) / np.sqrt(np.size(prob_q4))
+    snd_err = [snd_err1, snd_err2, snd_err3, snd_err4]
+    print('Standard Error for each Quartile for ' + locus + ': \n' + str(snd_err))
+
     # Create a table exactly like the print statements above to add to the bottom of the calibration plot
-    table_data = [["Quartile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob"],
-                  ['Q1', str(round(probability_avg[0], 4)), str(round(true_avg[0], 4)), str(round(min_prob_in_bin[0], 4)), str(round(max_prob_in_bin[0], 4))],
-                  ['Q2', str(round(probability_avg[1], 4)), str(round(true_avg[1], 4)), str(round(min_prob_in_bin[1], 4)), str(round(max_prob_in_bin[1], 4))],
-                  ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4))],
-                  ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4))]]
+    table_data = [["Quartile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"],
+                  ['Q1', str(round(probability_avg[0], 4)), str(round(true_avg[0], 4)), str(round(min_prob_in_bin[0], 4)), str(round(max_prob_in_bin[0], 4)), str(round(snd_err1, 4))],
+                  ['Q2', str(round(probability_avg[1], 4)), str(round(true_avg[1], 4)), str(round(min_prob_in_bin[1], 4)), str(round(max_prob_in_bin[1], 4)), str(round(snd_err2, 4))],
+                  ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4)), str(round(snd_err3, 4))],
+                  ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4)), str(round(snd_err4, 4))]]
 
     # Create a bar plot where it shows the distribution of predictions, have to separate it from plot so it does not get added in
     counts, bins, _ = plt.hist(sort_probability, bins=20)
@@ -174,17 +200,18 @@ for locus in loci:
     fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
 
     calibrat_plot = plt.figure(figsize=(8, 8))
-    calibrat_plot = plt.plot(probability_avg, true_avg, marker='o', linestyle='', label='Calibration Curve', color='red')
-    calibrat_plot = plt.plot([0,1], [0,1], linestyle='--', label='Ideal Calibration', color='blue')
+    calibrat_plot = plt.errorbar(probability_avg, true_avg, yerr=snd_err, marker='o', linestyle='', label='True fraction vs probability average for quartile', color='red', ecolor='black', capsize=7)
+    calibrat_plot = plt.plot([0,1], linestyle='--', label='Ideal Calibration', color='blue')
     # calibrat_plot = plt.xlabel('Mean Predicted Probability within Quartile for ' + locus)
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
     # plt.yscale('log')
     # plt.xscale('log')
-    calibrat_plot = plt.title('Probability Calibration Curve for HLA-' + locus + " Locus")
+    calibrat_plot = plt.title('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" + 'Brier Score Loss: ' + str(round(brier_loss[locus], 4)))
     calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='grey')
     calibrat_plot = plt.xlim(0,1.05)
     calibrat_plot = plt.ylim(0,1.05)
     table = plt.table(cellText=table_data)
+    table = table.scale(1, 1.5)
     ax = plt.gca()
     ax.get_xaxis().set_visible(False)
     calibrat_plot = plt.legend()
