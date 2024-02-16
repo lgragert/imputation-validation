@@ -66,8 +66,8 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
     return neg_count
 
 
-truth_filename = 'genotype_truth_table.csv'  # sys.argv[1]
-impute_filename = 'lowres_topprob_impute.csv'   # sys.argv[2]
+truth_filename = sys.argv[1]   # 'genotype_truth_table.csv'  # sys.argv[1]
+impute_filename = sys.argv[2]  # 'lowres_topprob_impute.csv'   # sys.argv[2]
 truth_table = pd.read_csv(truth_filename, header=0)
 impute = pd.read_csv(impute_filename, header=0)
 
@@ -183,6 +183,8 @@ for locus in loci:
     # Compute the city-block distance between the quantiles and the diagonal (x=y)
     city_block_dst = (abs(probability_avg[0] - true_avg[0]) + abs(probability_avg[1] - true_avg[1]) + abs(probability_avg[2] - true_avg[2]) + abs(probability_avg[3] - true_avg[3])) / n_bins
 
+    # Mean Squared Error (MSE) for the bin averages
+    mse_bins = np.square((abs(probability_avg[0] - true_avg[0]) + abs(probability_avg[1] - true_avg[1]) + abs(probability_avg[2] - true_avg[2]) + abs(probability_avg[3] - true_avg[3]))) / n_bins
 
     # Create a table exactly like the print statements above to add to the bottom of the calibration plot
     table_data = [["Quantile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"],
@@ -190,6 +192,7 @@ for locus in loci:
                   ['Q2', str(round(probability_avg[1], 4)), str(round(true_avg[1], 4)), str(round(min_prob_in_bin[1], 4)), str(round(max_prob_in_bin[1], 4)), str(round(snd_err2, 4))],
                   ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4)), str(round(snd_err3, 4))],
                   ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4)), str(round(snd_err4, 4))]]
+
     print('Quantile Statistics for Locus: ', locus)
     print(table_data[0])
     print(table_data[1])
@@ -203,7 +206,7 @@ for locus in loci:
     fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
 
     calibrat_plot = plt.figure(figsize=(8, 8))
-    calibrat_plot = plt.errorbar(probability_avg, true_avg, yerr=snd_err, marker='o', linestyle='', label='True Fraction vs Probability Average for Quartile', color='red', ecolor='black', capsize=7)
+    calibrat_plot = plt.errorbar(probability_avg, true_avg, yerr=snd_err, marker='o', linestyle='', label='True Fraction vs Probability Average for Quantile', color='red', ecolor='black', capsize=7)
     calibrat_plot = plt.plot([0,1], linestyle='--', label='Ideal Calibration', color='blue')
     calibrat_plot = plt.xlabel('Mean Predicted Probability for Quantile')
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
@@ -218,7 +221,9 @@ for locus in loci:
     ax = plt.gca()
     ax.xaxis.set_label_position('top')  # have to add x-axis to the top because of the table at the bottom
     ax.xaxis.set_ticks_position('top')
-    ax.set_title('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" + 'Brier Score Loss: ' + str(round(brier_loss[locus], 4)) + '\n' + 'City-Block Distance: ' + str(round(city_block_dst, 4)), pad=20)  # Space between x-axis and title
+    ax.set_title('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" +
+                 'Brier: ' + str(round(brier_loss[locus], 4)) + ', Bin Avg MSE: ' +
+                 str(round(mse_bins, 4)) + ', Bin Avg City-Block Dist: ' + str(round(city_block_dst, 4)), pad=20)  # Space between x-axis and title
     calibrat_plot = plt.legend()
     calibrat_plot = plt.savefig("Calibration_" + locus + ".png", bbox_inches='tight')
     # plt.show()
