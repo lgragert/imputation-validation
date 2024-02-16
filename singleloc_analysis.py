@@ -170,10 +170,10 @@ for locus in loci:
     fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
 
     calibrat_plot = plt.figure(figsize=(8, 8))
-    calibrat_plot = plt.plot(true_avg, probability_avg, marker='o', linestyle='', label='Calibration Curve')
-    calibrat_plot = plt.plot([0, 1], linestyle='--', label='Ideal Calibration')
-    calibrat_plot = plt.ylabel('Mean Predicted Probability within Quartile for ' + locus)
-    calibrat_plot = plt.xlabel('Fraction of Predictions Correct')
+    calibrat_plot = plt.plot(probability_avg, true_avg, marker='o', linestyle='', label='Calibration Curve')
+    calibrat_plot = plt.plot([0,1], [0,1], linestyle='--', label='Ideal Calibration')
+    calibrat_plot = plt.xlabel('Mean Predicted Probability within Quartile for ' + locus)
+    calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
     # plt.yscale('log')
     # plt.xscale('log')
     calibrat_plot = plt.title('Probability Calibration for ' + locus + " Locus")
@@ -184,6 +184,10 @@ for locus in loci:
     calibrat_plot = plt.savefig("Calibration_" + locus + ".png", bbox_inches='tight')
     # plt.show()
 
+    # Create a table
+
+    # Display ROC plots
+    # TODO - create a plot with multiple ROCs on one plot
     roc_plot = RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
     roc_plot = plt.title('ROC Curve and AUC for ' + locus)
     roc_plot = plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
