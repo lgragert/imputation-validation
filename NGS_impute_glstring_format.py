@@ -2,21 +2,54 @@
 import pandas as pd
 from collections import defaultdict
 import gzip
+import pyard
+ard = pyard.init("3520")
 
 # Clean true genoytope high resolution data to standard format
-# Pick top probability from the low resolution imputation files
+# Pick top probability from the low resolution imputation file
 
-# Add the letter in front of typing for each loci
+# Add the letter in front of typing for each loci, roll back to lgx typing, and sort it
 def add_locus(ngs, letter):
-    typing1 = ngs['NGS_' + letter + 'i']
-    typing2 = ngs['NGS_' + letter + 'ii']
 
-    if letter == 'DRB345':
-        typing1 = typing1.fillna('X*NNNN')
-        typing2 = typing2.fillna('X*NNNN')
-        ngs['DON_' + letter] = 'DRB' + typing1 + '+' + 'DRB' + typing2
-    else:
-        ngs['DON_' + letter] = letter + "*" + typing1 + "+" + letter + '*' + typing2
+    for line in range(len(ngs)):
+        typing1 = ngs.loc[line, 'NGS_' + letter + 'i']
+        typing1 = str(typing1)
+        typing2 = ngs.loc[line, 'NGS_' + letter + 'ii']
+        typing2 = str(typing2)
+
+        if letter == 'DRB345':
+            if typing1 == 'nan':
+                typing1 = 'DRBX*NNNN'
+            else:
+                typing1 = 'DRB' + typing1
+                typing1 = ard.redux(typing1, 'lgx')
+            if typing2 == 'nan':
+                typing2 = 'DRBX*NNNN'
+            else:
+                typing2 = 'DRB' + typing2
+                typing2 = ard.redux(typing2, 'lgx')
+            (typing1, typing2) = sorted([typing1, typing2])
+            ngs.loc[line, 'DON_' + letter] = typing1 + '+' + typing2
+        else:
+            typing1 = letter + '*' + typing1
+            typing2 = letter + '*' + typing2
+            (typing1, typing2) = sorted([typing1, typing2])
+
+            if typing1 == 'DPB1*NEW':
+                typing1 = 'DPB1*NEW'
+            elif typing1 == 'DQA1*NEW':
+                typing1 = 'DQA1*NEW'
+            else:
+                typing1 = ard.redux(typing1, 'lgx')
+
+            if typing2 == 'DPB1*NEW':
+                typing2 = 'DPB1*NEW'
+            elif typing2 == 'DQA1*NEW':
+                typing2 = 'DQA1*NEW'
+            else:
+                typing2 = ard.redux(typing2, 'lgx')
+
+            ngs.loc[line, 'DON_' + letter] = typing1 + "+" + typing2
 
     return ngs
 
