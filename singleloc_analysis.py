@@ -4,8 +4,6 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, RocCurveDisplay, roc_curve
 import matplotlib.pyplot as plt
 import sys
-import pyard
-ard = pyard.init("3520")
 
 # Compare the imputation to the truth table for single locus unphased genotype analysis
 # If both alleles are the same, then that is a positive prediction=1, and if one/both are incorrect then that is a negative prediction=0
@@ -46,23 +44,6 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
     else:
         neg_count = 0
 
-    # # Cannot assume they are in exact order, so create a count of negative predictions
-    # donor_homoz = 0
-    # if truth_typ1 == truth_typ2:
-    #     donor_homoz = 1
-    # neg_count = 0
-    # if (truth_typ1 != impute_typ1) & (truth_typ1 != impute_typ2):
-    #     neg_count += 1
-    # if (truth_typ2 != impute_typ1) & (truth_typ2 != impute_typ2):
-    #     neg_count += 1
-    # if (neg_count == 2) & (donor_homoz == 1):
-    #     neg_count = 1
-    # # Want to make it to where 1=correct prediction and 0=incorrect prediction
-    # if neg_count >= 1:
-    #     neg_count = 0
-    # else:
-    #     neg_count = 1
-
     return neg_count
 
 
@@ -96,25 +77,6 @@ for line in range(len(truth_table)):
         impute1 = impute.loc[line, locus + '_1']
         impute2 = impute.loc[line, locus + '_2']
         (impute1, impute2) = sorted([impute1, impute2])
-
-        # py-ARD lgx rollup on truth
-        if truth1 == 'DRBX*NNNN':
-            truth1 = 'DRBX*NNNN'
-        elif truth1 == 'DPB1*NEW':
-            truth1 = 'DPB1*NEW'
-        elif truth1 == 'DQA1*NEW':
-            truth1 = 'DQA1*NEW'
-        else:
-            truth1 = ard.redux(truth1, 'lgx')
-
-        if truth2 == 'DRBX*NNNN':
-            truth2 = 'DRBX*NNNN'
-        elif truth2 == 'DPB1*NEW':
-            truth2 = 'DPB1*NEW'
-        elif truth2 == 'DQA1*NEW':
-            truth2 = 'DQA1*NEW'
-        else:
-            truth2 = ard.redux(truth2,'lgx')
 
         impute.loc[line, locus + '_True'] = neg_prediction(truth1, truth2, impute1, impute2)
 
