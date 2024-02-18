@@ -2,6 +2,8 @@
 import pandas as pd
 from collections import defaultdict
 import gzip
+import warnings
+warnings.filterwarnings("ignore")
 import pyard
 ard = pyard.init("3520")
 
@@ -35,17 +37,13 @@ def add_locus(ngs, letter):
             typing2 = letter + '*' + typing2
             (typing1, typing2) = sorted([typing1, typing2])
 
-            if typing1 == 'DPB1*NEW':
-                typing1 = 'DPB1*NEW'
-            elif typing1 == 'DQA1*NEW':
-                typing1 = 'DQA1*NEW'
+            if typing1.endswith('NEW'):
+                typing1 = typing1
             else:
                 typing1 = ard.redux(typing1, 'lgx')
 
-            if typing2 == 'DPB1*NEW':
-                typing2 = 'DPB1*NEW'
-            elif typing2 == 'DQA1*NEW':
-                typing2 = 'DQA1*NEW'
+            if typing2.endswith('NEW'):
+                typing2 = typing2
             else:
                 typing2 = ard.redux(typing2, 'lgx')
 
@@ -99,6 +97,11 @@ GF_DQA1 = defaultdict(dict)
 GF_DQB1 = defaultdict(dict)
 GF_DPA1 = defaultdict(dict)
 GF_DPB1 = defaultdict(dict)
+ClassI_freq = defaultdict(dict)
+DRDQ_freq = defaultdict(dict)
+DR_freq = defaultdict(dict)
+DQ_freq = defaultdict(dict)
+sevenloc_freq = defaultdict(dict)
 for pop in pops:
     file_name = 'impute.nyulowres.' + pop + '.csv.gz'
     impute_outfile = gzip.open(file_name, "rt")
@@ -156,9 +159,9 @@ for pop in pops:
 
         happair = '^'.join([GENO_A, GENO_B, GENO_C, GENO_DRB1, GENO_DRB345, GENO_DQA1, GENO_DQB1, GENO_DPA1, GENO_DPB1])
 
-        prob = happair_freq / happair_id_total[subject_id]  # For genotype frequency
+        prob = happair_freq / happair_id_total[subject_id]  # For genotype probability
 
-        # For multilocus analysis, use the haplotype frequency
+        # For multilocus analysis for 9-loci, use the haplotype frequency
         if happair not in multiloc_freq[subject_id]:
             multiloc_freq[subject_id][happair] = happair_freq
         else:
@@ -210,25 +213,62 @@ for pop in pops:
         else:
             GF_DPB1[subject_id][GENO_DPB1] = GF_DPB1[subject_id][GENO_DPB1] + prob
 
+        # Create 7-loci probability
+        sevenloc = '^'.join([GENO_A, GENO_B, GENO_C, GENO_DRB1, GENO_DRB345, GENO_DQA1, GENO_DQB1])
+        if sevenloc not in sevenloc_freq[subject_id]:
+            sevenloc_freq[subject_id][sevenloc] = prob
+        else:
+            sevenloc_freq[subject_id][sevenloc] = sevenloc_freq[subject_id][sevenloc] + prob
 
-# Get top impute with the new multilocus frequency
-top_multiloc_impute = pd.DataFrame()
-for key, value in multiloc_freq.items():
-    id = key
-    haplotype = max(value, key=value.get)  # only want the haplotype highest frequency for now
-    freq = value[haplotype]                # only want the highest frequency corresponding with the haplotype
-    line = pd.DataFrame({'MUG_GLString': haplotype, 'HapPair_Prob': freq}, index=[id])
+        # Create Class I probability
+        classI = '^'.join([GENO_A, GENO_B, GENO_C])
+        if classI not in ClassI_freq[subject_id]:
+            ClassI_freq[subject_id][classI] = prob
+        else:
+            ClassI_freq[subject_id][classI] = ClassI_freq[subject_id][classI] + prob
 
-    top_multiloc_impute = pd.concat([top_multiloc_impute, line])
+        # Create DQ-DR probability
+        dq_dr = '^'.join([GENO_DRB1, GENO_DRB345, GENO_DQA1, GENO_DQB1])
+        if dq_dr not in DRDQ_freq[subject_id]:
+            DRDQ_freq[subject_id][dq_dr] = prob
+        else:
+            DRDQ_freq[subject_id][dq_dr] = DRDQ_freq[subject_id][dq_dr] + prob
+
+        # Create DR probability
+        dr_only = '^'.join([GENO_DRB1, GENO_DRB345])
+        if dr_only not in DR_freq[subject_id]:
+            DR_freq[subject_id][dr_only] = prob
+        else:
+            DR_freq[subject_id][dr_only] = DR_freq[subject_id][dr_only] + prob
+
+        # Create DQ probability
+        dq_only = '^'.join([GENO_DQA1, GENO_DQB1])
+        if dq_only not in DQ_freq[subject_id]:
+            DQ_freq[subject_id][dq_only] = prob
+        else:
+            DQ_freq[subject_id][dq_only] = DQ_freq[subject_id][dq_only] + prob
 
 
 # Reformat the Genotype Frequency dictionaries into DataFrames
-def single_loc_df(top_sl_impute, geno_dict, locus):
+def top_impute_df(top_sl_impute, geno_dict, locus, which_impute):
     top_singleloc = pd.DataFrame()
     for id, values in geno_dict.items():
-        top_genotype = max(values, key=values.get)
-        top_freq = values[top_genotype]
-        line = pd.DataFrame({'GENO_' + locus: top_genotype, 'GENO_' + locus + '_Prob': top_freq}, index=[id])
+        top_genotype = max(values, key=values.get)  # only want the haplotype highest frequency for now
+        top_freq = values[top_genotype]             # only want the highest frequency corresponding with the haplotype
+        if which_impute == 'singleloc':
+            line = pd.DataFrame({'GENO_' + locus: top_genotype, 'GENO_' + locus + '_Prob': top_freq}, index=[id])
+        elif which_impute == '9loc':
+            line = pd.DataFrame({'9loc_GLString': top_genotype, 'HapPair_Prob': top_freq}, index=[id])
+        elif which_impute == '7loc':
+            line = pd.DataFrame({'7loc_GLString': top_genotype, '7loc_Prob': top_freq}, index=[id])
+        elif which_impute == 'class I':
+            line = pd.DataFrame({'ClassI_GLString': top_genotype, 'ClassI_Prob': top_freq}, index=[id])
+        elif which_impute == 'DR-DQ':
+            line = pd.DataFrame({'DRDQ_GLString': top_genotype, 'DRDQ_Prob': top_freq}, index=[id])
+        elif which_impute == 'DR':
+            line = pd.DataFrame({'DR_GLString': top_genotype, 'DR_Prob': top_freq}, index=[id])
+        elif which_impute == 'DQ':
+            line = pd.DataFrame({'DQ_GLString': top_genotype, 'DQ_Prob': top_freq}, index=[id])
 
         top_singleloc = pd.concat([top_singleloc, line])
 
@@ -237,29 +277,43 @@ def single_loc_df(top_sl_impute, geno_dict, locus):
     return top_sl_impute
 
 
+# Get top impute with the new 9-loci level multilocus frequency
+top_9loc_impute = pd.DataFrame()
+top_9loc_impute = top_impute_df(top_9loc_impute, multiloc_freq, '', '9loc')
+top_7loc_impute = pd.DataFrame()
+top_7loc_impute = top_impute_df(top_7loc_impute, sevenloc_freq, '', '7loc')
+top_classi_impute = pd.DataFrame()
+top_classi_impute = top_impute_df(top_classi_impute, ClassI_freq, '', 'class I')
+top_drdq_impute = pd.DataFrame()
+top_drdq_impute = top_impute_df(top_drdq_impute, DRDQ_freq, '', 'DR-DQ')
+top_dr_impute = pd.DataFrame()
+top_dr_impute = top_impute_df(top_dr_impute, DR_freq, '', 'DR')
+top_dq_impute = pd.DataFrame()
+top_dq_impute = top_impute_df(top_dq_impute, DQ_freq, '', 'DQ')
+
 # Get top impute with the new genotype frequencies
 # The most probable genotype at a locus might be different than what was in the multilocus genotype
 top_singleloc_impute = pd.DataFrame()
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_A, 'A')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_B, 'B')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_C, 'C')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_DRB1, 'DRB1')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_DRB345, 'DRB345')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_DQA1, 'DQA1')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_DQB1, 'DQB1')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_DPA1, 'DPA1')
-top_singleloc_impute = single_loc_df(top_singleloc_impute, GF_DPB1, 'DPB1')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_A, 'A', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_B, 'B', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_C, 'C', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DRB1, 'DRB1', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DRB345, 'DRB345', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DQA1, 'DQA1', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DQB1, 'DQB1', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DPA1, 'DPA1', 'singleloc')
+top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DPB1, 'DPB1', 'singleloc')
 
 
 top_singleloc_impute['SLUG_GLString'] = top_singleloc_impute['GENO_A'] + '^' + top_singleloc_impute['GENO_B'] + '^' + top_singleloc_impute['GENO_C'] + '^' + top_singleloc_impute['GENO_DRB1'] + '^' + top_singleloc_impute['GENO_DRB345'] + '^' + top_singleloc_impute['GENO_DQA1'] + '^' + top_singleloc_impute['GENO_DQB1'] + '^' + top_singleloc_impute['GENO_DPA1'] + '^' + top_singleloc_impute['GENO_DPB1']
 top_singleloc_impute = top_singleloc_impute[['SLUG_GLString', 'GENO_A_Prob', 'GENO_B_Prob', 'GENO_C_Prob', 'GENO_DRB1_Prob', 'GENO_DRB345_Prob', 'GENO_DQA1_Prob', 'GENO_DQB1_Prob', 'GENO_DPA1_Prob', 'GENO_DPB1_Prob']]
 
-top_impute = pd.concat([top_multiloc_impute, top_singleloc_impute], axis=1)
+top_impute = pd.concat([top_9loc_impute, top_singleloc_impute, top_7loc_impute, top_classi_impute, top_drdq_impute, top_dr_impute, top_dq_impute], axis=1)
 top_impute = top_impute.reset_index(names=['ID'])
 
 # See if GLStrings are similar for MUG and SLUG analysis
 boolean = pd.DataFrame()
-boolean['Boolean'] = top_impute['MUG_GLString'] == top_impute['SLUG_GLString']
-print('Amount of GLStrings that are the same for MUG and SLUG: ', str(boolean['Boolean'].sum()) + "/" + '212')
+boolean['Boolean'] = top_impute['9loc_GLString'] == top_impute['SLUG_GLString']
+print('Amount of GLStrings that are the same for 9loc-MUG and SLUG: ', str(boolean['Boolean'].sum()) + "/" + '212')
 
 top_impute.to_csv('lowres_topprob_impute.csv', header=True, index=False)
