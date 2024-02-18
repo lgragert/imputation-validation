@@ -1,7 +1,7 @@
 
 import pandas as pd
 import numpy as np
-from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, RocCurveDisplay, roc_curve
+from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, roc_curve
 import matplotlib.pyplot as plt
 import sys
 
@@ -16,7 +16,7 @@ def sep_glstring(file, high_res, glstring):
         file = file.drop(columns=['GLString'])
     else:
         file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
-        file = file.drop(columns=['SLUG_GLString', 'MUG_GLString', 'HapPair_Prob'])
+        file = file.drop(columns=['SLUG_GLString', '9loc_GLString', 'HapPair_Prob'])
 
     loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
     for locus in loci:
@@ -62,7 +62,7 @@ high_res = True
 truth_table = sep_glstring(truth_table, high_res, 'GLString')
 impute = sep_glstring(impute, high_res, 'SLUG_GLString')
 
-if high_res == False:
+if high_res is False:
     loci = ['A', 'B', 'C', 'DRB1', 'DQB1']
 else:
     loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
@@ -174,7 +174,7 @@ for locus in loci:
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
     # plt.yscale('log')
     # plt.xscale('log')
-    # calibrat_plot = plt.suptitle('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" + 'Brier Score Loss: ' + str(round(brier_loss[locus], 4)) + '\n                        \n')
+    # calibrat_plot9loc = plt.suptitle('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" + 'Brier Score Loss: ' + str(round(brier_loss[locus], 4)) + '\n                        \n')
     calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='grey')
     calibrat_plot = plt.xlim(0,1.05)
     calibrat_plot = plt.ylim(0,1.05)
