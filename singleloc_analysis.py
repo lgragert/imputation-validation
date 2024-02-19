@@ -12,10 +12,10 @@ import sys
 # Separate the GLString out into locus pairings
 def sep_glstring(file, high_res, glstring):
     if glstring == 'GLString':
-        file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
+        file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
         file = file.drop(columns=['GLString'])
     else:
-        file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
+        file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
         file = file.drop(columns=['SLUG_GLString', '9loc_GLString', 'HapPair_Prob'])
 
     loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
@@ -218,4 +218,6 @@ ra = pd.DataFrame({'ROC-AUC': roc_auc}, index=roc_auc.keys())
 confusion_mat = pd.concat([confusion_mat, bf], axis=1)
 confusion_mat = pd.concat([confusion_mat, ra], axis=1)
 print(confusion_mat)
+
+
 
