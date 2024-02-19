@@ -33,13 +33,13 @@ def neg_prediction(truth_typ,impute_typ, whichtype):
 
 # Separate GLString for truth tables for calculating predictions for anything other than 9-loci
 def sep_glstring(file, whichlevel):
-    file[['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
+    file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
     file = file.drop(columns=['GLString'])
 
     if whichlevel == '7-loc':
-        file['GLString'] = file['A'] + '^' + file['B'] + '^' + file['C'] + '^' + file['DRB1'] + '^' + file['DRB345'] + '^' + file['DQA1'] + '^' + file['DQB1']
+        file['GLString'] = file['A'] + '^' + file['B'] + '^' + file['C'] + '^' + file['DRB345'] + '^' + file['DRB1'] + '^' + file['DQA1'] + '^' + file['DQB1']
     elif whichlevel == 'DR-DQ':
-        file['GLString'] = file['DRB1'] + '^' + file['DRB345'] + '^' + file['DQA1'] + '^' + file['DQB1']
+        file['GLString'] = file['DRB345'] + '^' + file['DRB1'] + '^' + file['DQA1'] + '^' + file['DQB1']
     elif whichlevel == 'Class I':
         file['GLString'] = file['A'] + '^' + file['B'] + '^' + file['C']
 
