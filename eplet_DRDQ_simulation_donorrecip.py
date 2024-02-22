@@ -11,6 +11,7 @@ import time
 
 # Compute eplet MM for HLA DR-DQ (DRB345, DRB1, DQA1, DQB1) in a simulated dataset of ~200 'donor-recipients'
 
+
 # Separate GLString for truth tables for DR-DQ genotypes
 def sep_glstring(file):
     file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
@@ -50,6 +51,31 @@ for line in range(len(impute_lowres)):
 
 # Use imputation output, compute eplet MM for each possible donor and recipient
 # Go through dictionary to find the best pairings
+# Clean the JSON string
+def clean_eplet_str(eplet_list_df):
+    eplet_list_df = eplet_list_df.str.replace(', ', '_')
+    eplet_list_df = eplet_list_df.str.replace('\'', '')
+    eplet_list_df = eplet_list_df.str.replace('[', '', regex=True).replace(']','', regex=True)
+    return eplet_list_df
+
+
+# Splits up explanation to let us know where each eplet came from, either DRB345, DRB1, DQA1, or DQB1 MM
+def clean_expl_eplet(eplet_str_df, key):
+    eplet_str_df = eplet_str_df.str.split(': ', expand=True)
+    first_eplet = eplet_str_df[3].str.split('], ', expand=True)
+    second_eplet = eplet_str_df[7].str.split('], ', expand=True)
+    if key == 'DRB':
+        first_eplet[key + "345_details"] = clean_eplet_str(first_eplet[0])
+        second_eplet[key + "1_details"] = clean_eplet_str(second_eplet[0])
+        eplet_str_df = pd.concat([first_eplet[key + "345_details"], second_eplet[key + "1_details"]], axis=1)
+    else:
+        first_eplet[key + "A1_details"] = clean_eplet_str(first_eplet[0])
+        second_eplet[key + "B1_details"] = clean_eplet_str(second_eplet[0])
+        eplet_str_df = pd.concat([first_eplet[key + "A1_details"], second_eplet[key + "B1_details"]], axis=1)
+
+    return eplet_str_df
+
+
 pair_computed = {}
 eplet_dataframe = pd.DataFrame()
 for donor_ID in GF_DRDQ:
@@ -84,18 +110,25 @@ for donor_ID in GF_DRDQ:
                 e_df = pd.DataFrame()
                 for key, value in out_put.items():
                     eplet_dict = {}
-                    if key == 'ABC' or key == 'DP' or key == 'MICA' or key == 'version':  # Only looking at DRDQ, version cannot do the loop, at this time version=01-2024
+                    if key == 'ABC' or key == 'DP' or key == 'MICA' or key == 'version':  # Only looking at DRDQ, version cannot do the loop, at this time version=2024-01-22
                         continue
                     for labels, extended in value.items():
                         named = key + "_" + labels
                         eplet_dict[named] = str(extended)
                         eplet_df = pd.DataFrame(eplet_dict, index=[id_pair], columns=[named])
+                        if eplet_df.columns == key + "_" + 'details':
+                            eplet_df[key + "_" + 'details'] = clean_eplet_str(eplet_df[key + "_" + 'details'])
+                        if eplet_df.columns == 'DRB_explanation':
+                            eplet_df = clean_expl_eplet(eplet_df[key + "_" + 'explanation'], key)
+                        elif eplet_df.columns == 'DQ_explanation':
+                            eplet_df = clean_expl_eplet(eplet_df[key + "_" + 'explanation'], key)
                         e_df = pd.concat([e_df, eplet_df], axis=1)
-                        print(e_df)
                 eplet_dataframe = pd.concat([eplet_dataframe, e_df])
+                print(eplet_dataframe)
 
                 # Combining the calculator output and probabilities for each possible donor and recipient, compute probability distribution for each unique eplet MM
                 # TODO - Use immunizer_geno_prob and patient_geno_prob to compute eplet MM probabilities
+                
                 immunizer_geno_prob = GF_DRDQ[donor_ID][donor_geno_DRDQ]
                 patient_geno_prob = GF_DRDQ[recip_ID][recip_geno_DRDQ]
 
@@ -108,4 +141,5 @@ eplet_dataframe.to_csv('EpRegistry_lowres_impute.csv', header=True, index=True)
 # Unique set of eplet MM for: DR, DQ, DR+DQ
 # Eplet MM Counts for: DR, DQ, DR+DQ
 # Single molecule eplet MM risk categories: high, med, low
+
 
