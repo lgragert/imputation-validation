@@ -148,8 +148,8 @@ for donor_ID in GF_DRDQ:
                     time.sleep(60.0)
 
                 # Need to know which genotypes are used for each donor-recipient pairing corresponding to the IDs
-                donor_line = pd.DataFrame({"Donor_GLString": donor_geno_DRDQ, 'Recip_GLString': recip_geno_DRDQ}, index=[id_pair])
-                # donor_line = pd.DataFrame({'DON_ID': donor_ID, 'DON_GLString': donor_geno_DRDQ, 'REC_ID': recip_ID, 'Recip_GLString': recip_geno_DRDQ}, index=[id_pair])
+                # donor_line = pd.DataFrame({"Donor_GLString": donor_geno_DRDQ, 'Recip_GLString': recip_geno_DRDQ}, index=[id_pair])
+                donor_line = pd.DataFrame({'DON_ID': donor_ID, 'DON_GLString': donor_geno_DRDQ, 'REC_ID': recip_ID, 'REC_GLString': recip_geno_DRDQ}, index=[id_pair])
 
                 # Format donor and recip genotype for input to web service, which is a comma separated list
                 immunizer_alleles = donor_geno_DRDQ
@@ -174,11 +174,11 @@ for donor_ID in GF_DRDQ:
                         if eplet_df.columns == key + "_" + 'details':
                             eplet_df[key + "_" + 'details'] = clean_eplet_str(eplet_df[key + "_" + 'details'])
                         e_df = pd.concat([e_df, eplet_df], axis=1)
-                        e_df = pd.concat([e_df, donor_line], axis=1)  # concat the donor-recipient genotypes to clean eplet line
-                eplet_dataframe = pd.concat([eplet_dataframe, e_df])
+                donor_line = pd.concat([donor_line, e_df], axis=1)  # concat the donor-recipient genotypes to clean eplet line
+                eplet_dataframe = pd.concat([eplet_dataframe, donor_line])
                 print(eplet_dataframe)
-                time.sleep(2.0)
+                time.sleep(1.0)
 
-eplet_impute = eplet_dataframe[['ALL_quantity', 'ALL_details', 'DRB_quantity', 'DRB_details', 'DQ_quantity', 'DQ_details', 'Donor_GLString', 'Recip_GLString']].reset_index(names=['ID'])  # Only need these columns for now
+eplet_impute = eplet_dataframe[['DON_ID', 'DON_GLString', 'REC_ID', 'REC_GLString', 'ALL_quantity', 'ALL_details', 'DRB_quantity', 'DRB_details', 'DQ_quantity', 'DQ_details']].reset_index(drop=True)  # Only need these columns for now
 print(eplet_impute)
 eplet_impute.to_csv('eplet_lowres_impute.csv', header=True, index=False)  # work with eplets as a CSV and not worry about the JSON formatting
