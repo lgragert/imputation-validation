@@ -22,11 +22,15 @@ def add_locus(ngs, letter):
         if letter == 'DRB345':
             if typing1 == 'nan':
                 typing1 = 'DRBX*NNNN'
+            elif typing1 == '5*01:08N':   # When using redux it creates string of 'DRB5*01:02/DRB5*01:08' -> DRB5*01:08 does not work in HLAGenie, so chose DRB5*01:02
+                typing1 = 'DRB5*01:02'
             else:
                 typing1 = 'DRB' + typing1
                 typing1 = ard.redux(typing1, 'lgx')
             if typing2 == 'nan':
                 typing2 = 'DRBX*NNNN'
+            elif typing2 == '5*01:08N':
+                typing2 = 'DRB5*01:02'
             else:
                 typing2 = 'DRB' + typing2
                 typing2 = ard.redux(typing2, 'lgx')
@@ -67,7 +71,8 @@ for locus in loci:
     NGS = add_locus(NGS, locus)
 
 # Put the loci together in the GLString Format
-NGS['GLString'] = NGS['DON_A'] + '^' + NGS['DON_B'] + '^' + NGS['DON_C'] + '^' + NGS['DON_DRB345'] + '^' + NGS['DON_DRB1'] + '^' + NGS['DON_DQA1'] + '^' + NGS['DON_DQB1'] + '^' + NGS['DON_DPA1'] + '^' + NGS['DON_DPB1']
+NGS['GLString'] = (NGS['DON_A'] + '^' + NGS['DON_B'] + '^' + NGS['DON_C'] + '^' + NGS['DON_DRB345'] + '^' + NGS['DON_DRB1'] +
+                   '^' + NGS['DON_DQA1'] + '^' + NGS['DON_DQB1'] + '^' + NGS['DON_DPA1'] + '^' + NGS['DON_DPB1'])
 
 # # Split the race column by race and ethnicity to get it into correct format
 # NGS[['DON_RACE', 'DON_ETH']] = NGS['donorrace'].str.split(', ', expand=True)
@@ -276,14 +281,41 @@ def top_impute_df(top_sl_impute, geno_dict, locus, which_impute):
 
     return top_sl_impute
 
+def all_impute(impute_all, geno_dict, which_impute):
+    line_df = pd.DataFrame()
+    for key, values in geno_dict.items():
+        ids = key
+        for geno, freq in values.items():
+            if which_impute == 'DRDQ':
+                line = pd.DataFrame({'ID': ids, 'DRDQ_GLString': geno, 'DRDQ_freq': freq}, index=[ids])
+            elif which_impute == 'DR':
+                line = pd.DataFrame({'ID': ids, 'DR_GLString': geno, 'DR_freq': freq}, index=[ids])
+            else:
+                line = pd.DataFrame({'ID': ids, 'DQ_GLString': geno, 'DQ_freq': freq}, index=[ids])
+            line_df = pd.concat([line_df, line])
+
+    impute_all = pd.concat([impute_all, line_df], axis=1)
+
+    return impute_all
+
+
 # For eplet MM, keep all imputations and not just the top-imputation for DR-DQ
 # Keep genotype probabilities of DRB345, DRB1, DQA1, DQB1
+# for key, values in DRDQ_freq.items():
+#     ids = key
+#     for genotype, frequency in values.items():
+#         line = pd.DataFrame({'ID': ids, 'DRDQ_GLString': genotype, 'DQDR_freq': frequency}, index=[1])
+#         DRDQ_impute = pd.concat([DRDQ_impute, line]).reset_index(drop=True)
+
 DRDQ_impute = pd.DataFrame()
-for key, values in DRDQ_freq.items():
-    ids = key
-    for genotype, frequency in values.items():
-        line = pd.DataFrame({'ID': ids, 'DRDQ_GLString': genotype, 'DQDR_freq': frequency}, index=[1])
-        DRDQ_impute = pd.concat([DRDQ_impute, line]).reset_index(drop=True)
+DRDQ_impute = all_impute(DRDQ_impute, DRDQ_freq, 'DRDQ')
+DR_impute = pd.DataFrame()
+DR_impute = all_impute(DR_impute, DR_freq, 'DR')
+DQ_impute = pd.DataFrame()
+DQ_impute = all_impute(DQ_impute, DQ_freq, 'DQ')
+
+DRDQ_impute = pd.merge(DRDQ_impute, DR_impute, how='outer', on='ID')
+DRDQ_impute = pd.merge(DRDQ_impute, DQ_impute, how='outer', on='ID')
 
 print('Head of HLA DR-DQ imputations: \n', DRDQ_impute.head())
 DRDQ_impute.to_csv('lowres_DRDQ_impute.csv', header=True, index=False)
@@ -317,8 +349,13 @@ top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DPA1, 'DPA1', 'sin
 top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DPB1, 'DPB1', 'singleloc')
 
 
-top_singleloc_impute['SLUG_GLString'] = top_singleloc_impute['GENO_A'] + '^' + top_singleloc_impute['GENO_B'] + '^' + top_singleloc_impute['GENO_C'] + '^' + top_singleloc_impute['GENO_DRB345'] + '^' + top_singleloc_impute['GENO_DRB1'] + '^' + top_singleloc_impute['GENO_DQA1'] + '^' + top_singleloc_impute['GENO_DQB1'] + '^' + top_singleloc_impute['GENO_DPA1'] + '^' + top_singleloc_impute['GENO_DPB1']
-top_singleloc_impute = top_singleloc_impute[['SLUG_GLString', 'GENO_A_Prob', 'GENO_B_Prob', 'GENO_C_Prob', 'GENO_DRB345_Prob', 'GENO_DRB1_Prob', 'GENO_DQA1_Prob', 'GENO_DQB1_Prob', 'GENO_DPA1_Prob', 'GENO_DPB1_Prob']]
+top_singleloc_impute['SLUG_GLString'] = (top_singleloc_impute['GENO_A'] + '^' + top_singleloc_impute['GENO_B'] + '^' +
+                                         top_singleloc_impute['GENO_C'] + '^' + top_singleloc_impute['GENO_DRB345'] + '^' +
+                                         top_singleloc_impute['GENO_DRB1'] + '^' + top_singleloc_impute['GENO_DQA1'] + '^' +
+                                         top_singleloc_impute['GENO_DQB1'] + '^' + top_singleloc_impute['GENO_DPA1'] + '^' +
+                                         top_singleloc_impute['GENO_DPB1'])
+top_singleloc_impute = top_singleloc_impute[['SLUG_GLString', 'GENO_A_Prob', 'GENO_B_Prob', 'GENO_C_Prob', 'GENO_DRB345_Prob',
+                                             'GENO_DRB1_Prob', 'GENO_DQA1_Prob', 'GENO_DQB1_Prob', 'GENO_DPA1_Prob', 'GENO_DPB1_Prob']]
 
 top_impute = pd.concat([top_9loc_impute, top_singleloc_impute, top_7loc_impute, top_classi_impute, top_drdq_impute, top_dr_impute, top_dq_impute], axis=1)
 top_impute = top_impute.reset_index(names=['ID'])
@@ -329,4 +366,3 @@ boolean['Boolean'] = top_impute['9loc_GLString'] == top_impute['SLUG_GLString']
 print('Amount of GLStrings that are the same for 9loc-MUG and SLUG: ', str(boolean['Boolean'].sum()) + "/" + '212')
 
 top_impute.to_csv('lowres_topprob_impute.csv', header=True, index=False)
-
