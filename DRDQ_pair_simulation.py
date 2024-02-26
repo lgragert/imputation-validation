@@ -1,12 +1,8 @@
 
 import pandas as pd
 from collections import defaultdict
-import json
-import requests
-import time
-
-# Compute eplet MM for HLA DR-DQ (DRB345, DRB1, DQA1, DQB1) in a simulated dataset of 216 'donor-recipients'
-
+import math
+# Create pairings for the dataset of 216 subjects.
 
 # Separate GLString for truth tables for DR-DQ genotypes
 def sep_glstring(file):
@@ -19,14 +15,6 @@ def sep_glstring(file):
         file = file.drop(columns=[locus])
 
     return file
-
-
-# Clean the JSON string to have it as 'eplet_eplet_eplet'
-def clean_eplet_str(eplet_list_df):
-    eplet_list_df = eplet_list_df.str.replace(', ', '_')
-    eplet_list_df = eplet_list_df.str.replace('\'', '')
-    eplet_list_df = eplet_list_df.str.replace('[', '', regex=True).replace(']', '', regex=True)
-    return eplet_list_df
 
 
 # Clean truth table to only have DR-DQ genotypes and the simulated donor-recipient pairs
@@ -43,6 +31,21 @@ truth_table['GLString'] = (truth_table['DRB345_1'] + "+" + truth_table['DRB345_2
                            '^' + truth_table['DQA1_1'] + "+" + truth_table['DQA1_2'] +
                            '^' + truth_table['DQB1_1'] + "+" + truth_table['DQB1_2'])
 
+
+# Create truth dictionary with {genotype: [IDs]}
+TT_DRDQ = defaultdict(list)
+for line in range(len(truth_table)):
+    subject_id = truth_table.loc[line, 'ID']
+    GENO_DRDQ = truth_table.loc[line, 'GLString']
+
+    if subject_id not in TT_DRDQ:
+        TT_DRDQ[GENO_DRDQ].append(subject_id)
+    else:
+        continue
+        
+print("Unique Number of Genotypes in Truth Table: ", len(TT_DRDQ))
+print("Number of Pairings for Truth Table: ", math.comb(len(TT_DRDQ), 2))
+
 # Create truth dictionary with {ID: genotype: 1}
 TT_DRDQ = defaultdict(dict)
 for line in range(len(truth_table)):
@@ -53,7 +56,9 @@ for line in range(len(truth_table)):
         TT_DRDQ[subject_id][GENO_DRDQ] = 1
     else:
         continue
-
+        
+print("Unique Number of Genotypes in Truth Table: ", len(TT_DRDQ))
+print("Number of Pairings for Truth Table: ", math.comb(len(TT_DRDQ), 2))
 
 # Simulate highres "donor-recipient" pairs from the truth dataset by looping through all combinations
 truth_pairs = {}
@@ -88,8 +93,25 @@ eplet_truth_table = eplet_truth.reset_index(drop=True)
 print(eplet_truth_table)
 eplet_truth_table.to_csv('DRDQ_pairs_truth.csv', index=False, header=True)  # work with eplets as a CSV and not worry about the JSON formatting
 
+# Create file for multiple imputations
 impute_file = 'lowres_DRDQ_impute.csv'
 impute_lowres = pd.read_csv(impute_file, header=0)
+
+# Create a dictionary of the dataset such that GF_DRDQ[GENO_DRDQ][subject_id][freq]
+GF_DRDQ = defaultdict(dict)
+for line in range(len(impute_lowres)):
+    subject_id = impute_lowres.loc[line, 'ID']
+    GENO_DRDQ = impute_lowres.loc[line, 'DRDQ_GLString']
+    freq = impute_lowres.loc[line, 'DRDQ_freq']
+
+    if subject_id not in GF_DRDQ[GENO_DRDQ]:
+        GF_DRDQ[GENO_DRDQ][subject_id] = freq
+    else:
+        GF_DRDQ[GENO_DRDQ][subject_id] = GF_DRDQ[GENO_DRDQ][subject_id] + freq
+
+print("Unique Number of Genotypes in Truth Table: ", len(GF_DRDQ))
+print("Number of Pairings for Truth Table: ", math.comb(len(GF_DRDQ), 2))
+
 
 # Create a dictionary of the dataset such that GF_DRDQ[subject_ID][GENO_DRDQ][freq]
 GF_DRDQ = defaultdict(dict)
@@ -102,6 +124,9 @@ for line in range(len(impute_lowres)):
         GF_DRDQ[subject_id][GENO_DRDQ] = freq
     else:
         GF_DRDQ[subject_id][GENO_DRDQ] = GF_DRDQ[subject_id][GENO_DRDQ] + freq
+
+print("Unique Number of Genotypes in Truth Table: ", len(GF_DRDQ))
+print("Number of Pairings for Truth Table: ", math.comb(len(GF_DRDQ), 2))
 
 
 # Use imputation output, compute eplet MM for each possible donor and recipient and store it into a DataFrame
