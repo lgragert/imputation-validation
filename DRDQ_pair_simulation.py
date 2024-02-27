@@ -151,9 +151,13 @@ for donor_ID in GF_DRDQ:
                     patient_alleles = recip_geno_DRDQ
                     patient_alleles = patient_alleles.replace('^', ',').replace('+', ',')
 
+                    don_freq = GF_DRDQ[donor_ID][donor_geno_DRDQ]
+                    rec_freq = GF_DRDQ[recip_ID][recip_geno_DRDQ]
+                    pair_freq = don_freq * rec_freq
+
                     donrec_line = pd.DataFrame(
                         {'DON_ID': donor_ID, 'DON_GLString': immunizer_alleles, 'REC_ID': recip_ID,
-                         'REC_GLString': patient_alleles}, index=[id_pair])
+                         'REC_GLString': patient_alleles, "PairProb": pair_freq}, index=[id_pair])
                     eplet_prob = pd.concat([eplet_prob, donrec_line])
 
 eplet_impute = eplet_prob.reset_index(drop=True)  # Only need these columns for now
