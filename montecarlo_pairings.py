@@ -18,7 +18,7 @@ def clean_eplet_str(eplet_list_df):
 truth_filename = 'DRDQ_pairs_truth.csv'
 truth_pairs = pd.read_csv(truth_filename, header=0)
 
-# Start with 100 random pairs as that is what the API can handle
+# Start with 100 random pairs as that is what the API can handle: 100, 200, 500, 1,000... until API breaks
 n_pairs = 100
 n_truthpairs = truth_pairs.sample(n=n_pairs, random_state=2272024).reset_index(drop=True)  # Initialize state, to keep it consistent
 
@@ -30,11 +30,8 @@ rand_pairs = {}
 for row in range(len(n_truthpairs)):
     don_id = n_truthpairs.loc[row, 'DON_ID']
     rec_id = n_truthpairs.loc[row, 'REC_ID']
-    don_geno = n_truthpairs.loc[row, 'DON_GLString']
-    rec_geno = n_truthpairs.loc[row, 'REC_GLString']
 
     pairing = don_id + "+" + rec_id
-    pair_geno = don_geno + "+" + rec_geno
 
     if pairing not in rand_pairs:
         rand_pairs[pairing] = 1
@@ -123,7 +120,6 @@ for line in range(len(n_impute_pairs)):
     # Need to know which genotypes are used for each donor-recipient pairing corresponding to the IDs
     donor_line = pd.DataFrame({'DON_ID': donor_ID, 'DON_GLString': donor_geno_DRDQ, 'REC_ID': recip_ID, 'REC_GLString': recip_geno_DRDQ, "PairProb": pair_prob}, index=[id_pair])
 
-
     immunizer_alleles = donor_geno_DRDQ
     patient_alleles = recip_geno_DRDQ
 
@@ -149,6 +145,6 @@ for line in range(len(n_impute_pairs)):
     print(eplet_dataframe)
     time.sleep(1.0)
 
-eplet_impute = eplet_dataframe[['DON_ID', 'DON_GLString', 'REC_ID', 'REC_GLString', 'ALL_quantity', 'ALL_details', 'DRB_quantity', 'DRB_details', 'DQ_quantity', 'DQ_details']].reset_index(drop=True)  # Only need these columns for now
+eplet_impute = eplet_dataframe[['DON_ID', 'REC_ID', 'PairProb', 'DON_GLString', 'REC_GLString', 'ALL_quantity', 'ALL_details', 'DRB_quantity', 'DRB_details', 'DQ_quantity', 'DQ_details']].reset_index(drop=True)  # Only need these columns for now
 print(eplet_impute)
 eplet_impute.to_csv('eplet_lowres_impute' + str(n_pairs) + '.csv', header=True, index=False)
