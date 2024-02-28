@@ -2,11 +2,12 @@
 import pandas as pd
 from collections import defaultdict
 import numpy as np
-from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, roc_curve
+from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss
 import matplotlib.pyplot as plt
 import sys
 
 # Take the Monte Carlo output and compare the truth to the probabilities and create calibration curves
+
 
 # Reformat the Eplet Frequency dictionaries into DataFrames
 def top_impute_df(top_impute, eplet_dict, count_str, which_impute):
@@ -39,7 +40,8 @@ def neg_prediction(truth_typ, impute_typ):
     return neg_count
 
 
-truth_filename = "eplet_truth_table100.csv"
+n_pairs = 200
+truth_filename = "eplet_truth_table" + str(n_pairs) + ".csv"
 eplet_truth = pd.read_csv(truth_filename, header=0)
 
 # Get all pairs from the truth table
@@ -52,7 +54,7 @@ for row in range(len(eplet_truth)):
     else:
         rand_pairs[pair_id] = rand_pairs[pair_id] + 1
 
-impute_filename = "eplet_lowres_impute100.csv"
+impute_filename = "eplet_lowres_impute" + str(n_pairs) + ".csv"
 eplet_imptue = pd.read_csv(impute_filename, header=0)
 
 # Start with counts and go from there {DON+REC: {Count: prob}}
@@ -134,7 +136,7 @@ for line in range(len(eplet_truth)):
         top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplets, impute_eplets)
 
         prob = top_DRDQ_eplets.loc[line, heading + 'Prob']
-        threshold = 0.95
+        threshold = 0.9
         if prob >= threshold:
             top_DRDQ_eplets.loc[line, heading + '_Prediction'] = 1
         else:
@@ -147,8 +149,6 @@ for heading in class_ii_headers:
     impute_sort = top_DRDQ_eplets.sort_values(by=[heading + 'Prob'])
     sort_probability = impute_sort[heading + 'Prob'].to_numpy()
     sort_true_pred = impute_sort[heading+ '_True'].to_numpy()
-
-    n_pairs = 200
 
     # Create four points by taking the average in each bin
     n_bins = 4
