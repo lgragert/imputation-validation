@@ -38,10 +38,10 @@ def geno_pairs(GF_dict, don_geno, rec_geno, donID, recID, pair_ids, whichimpute)
 
 
 # Clean truth table to only have DR-DQ genotypes and the simulated donor-recipient pairs
-truth_file = 'genotype_truth_table.csv'
+which_impute = sys.argv[1]  # 'DRDQ'   # will change this parameter from DRDQ, DR, or DQ
+truth_file = sys.argv[2]  # 'genotype_truth_table.csv'
 truth_table = pd.read_csv(truth_file, header=0)
-which_impute = 'DRDQ'   # will change this parameter a lot
-impute_file = 'lowres_' + which_impute + '_impute.csv'
+impute_file = sys.argv[3]  # 'lowres_' + which_impute + '_impute.csv'
 impute_lowres = pd.read_csv(impute_file, header=0)
 truth_table = truth_table[truth_table.ID.isin(impute_lowres.ID)].reset_index(drop=True)
 truth_table = sep_glstring(truth_table)
@@ -112,13 +112,11 @@ for donor_ID in TT_DRDQ:
                         {'DON_ID': donor_ID, 'DON_GLString': immunizer_DRDQ, 'REC_ID': recip_ID,
                          'REC_GLString': patient_DRDQ}, index=[id_pair])
                     eplet_truth = pd.concat([eplet_truth, donrec_line])
-            print(eplet_truth)
 
 # Clean the format a little bit to only the columns you want
-eplet_truth_table = eplet_truth.sort_index().reset_index()
+eplet_truth_table = eplet_truth.sort_index().reset_index(drop=True)
 print(eplet_truth_table)
-eplet_truth_table.to_csv(which_impute + '_pairs_truth.csv', index=False,
-                         header=True)  # work with eplets as a CSV and not worry about the JSON formatting
+eplet_truth_table.to_csv(which_impute + '_pairs_truth.csv', header=True, index=False)  # work with eplets as a CSV and not worry about the JSON formatting
 
 # Create file for multiple imputations
 # Create a dictionary of the dataset such that GF_DRDQ[GENO_DRDQ][subject_id]
@@ -170,10 +168,10 @@ for donor_ID in GF_DRDQ:
             # loop through all possible genotypes for donor and recip pairing - should have made this a definition
             for donor_geno_DRDQ in GF_DRDQ[donor_ID]:
                 for recip_geno_DRDQ in GF_DRDQ[recip_ID]:
-                    donrec = geno_pairs(GF_DRDQ, donor_geno_DRDQ, recip_geno_DRDQ, donor_ID, recip_ID, id_pair, which_impute)  #  don_geno, rec_geno, donID, recID, pair_ids, whichimpute
+                    donrec = geno_pairs(GF_DRDQ, donor_geno_DRDQ, recip_geno_DRDQ, donor_ID, recip_ID, id_pair, which_impute)
                     eplet_DRDQ = pd.concat([eplet_DRDQ, donrec])
 
 
-eplet_impute = eplet_DRDQ.reset_index(drop=True)  # Only need these columns for now
+eplet_impute = eplet_DRDQ.sort_index().reset_index(drop=True)  # Only need these columns for now
 print(eplet_impute)
 eplet_impute.to_csv(which_impute + '_pairs_imputation.csv', header=True, index=False)
