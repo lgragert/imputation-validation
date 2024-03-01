@@ -314,11 +314,10 @@ DR_impute = all_impute(DR_impute, DR_freq, 'DR')
 DQ_impute = pd.DataFrame()
 DQ_impute = all_impute(DQ_impute, DQ_freq, 'DQ')
 
-DRDQ_impute = pd.merge(DRDQ_impute, DR_impute, how='outer', on='ID')
-DRDQ_impute = pd.merge(DRDQ_impute, DQ_impute, how='outer', on='ID')
-
 print('Head of HLA DR-DQ imputations: \n', DRDQ_impute.head())
 DRDQ_impute.to_csv('lowres_DRDQ_impute.csv', header=True, index=False)
+DR_impute.to_csv('lowres_DR_impute.csv', header=True, index=False)
+DQ_impute.to_csv('lowres_DQ_impute.csv', header=True, index=False)
 
 
 # Get top impute with the new 9-loci level multilocus frequency
