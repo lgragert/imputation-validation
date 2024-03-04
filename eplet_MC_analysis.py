@@ -29,8 +29,6 @@ def top_impute_df(top_impute, eplet_dict, count_str, which_impute):
 def neg_prediction(truth_typ, impute_typ):
     # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
     # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
-    truth_typ = str(truth_typ)
-    impute_typ = str(impute_typ)  # for anything that is NaN, better this way
 
     if truth_typ == impute_typ:
         neg_count = 1
@@ -40,8 +38,9 @@ def neg_prediction(truth_typ, impute_typ):
     return neg_count
 
 
-n_pairs = 200
-truth_filename = "eplet_truth_table" + str(n_pairs) + ".csv"
+n_pairs = '100'
+which_impute = 'DRDQ'
+truth_filename = which_impute + "_eplet_truth_table" + n_pairs + ".csv"
 eplet_truth = pd.read_csv(truth_filename, header=0)
 
 # Get all pairs from the truth table
@@ -54,7 +53,7 @@ for row in range(len(eplet_truth)):
     else:
         rand_pairs[pair_id] = rand_pairs[pair_id] + 1
 
-impute_filename = "eplet_lowres_impute" + str(n_pairs) + ".csv"
+impute_filename = which_impute + "_eplet_lowres_impute" + n_pairs + ".csv"
 eplet_imptue = pd.read_csv(impute_filename, header=0)
 
 # Start with counts and go from there {DON+REC: {Count: prob}}
@@ -65,6 +64,13 @@ DQ_count = defaultdict(dict)
 DRDQ_eplet = defaultdict(dict)
 DR_eplet = defaultdict(dict)
 DQ_eplet = defaultdict(dict)
+
+if which_impute == 'DRDQ':
+    which_eplet = 'ALL'
+elif which_impute == 'DR':
+    which_eplet = 'DRB'
+else:
+    which_eplet = 'DQ'
 for pair in rand_pairs:
     don, rec = pair.split("+")
 
@@ -76,71 +82,57 @@ for pair in rand_pairs:
     pairing_lines = pairing_lines.reset_index(drop=True)
 
     for row in range(len(pairing_lines)):
-        DRDQ_quant = pairing_lines.loc[row, 'ALL_quantity']
-        DR_quant = pairing_lines.loc[row, 'DRB_quantity']
-        DQ_quant = pairing_lines.loc[row, 'DQ_quantity']
-        pairprob = pairing_lines.loc[row, 'PairProb']
+        DRDQ_quant = pairing_lines.loc[row, which_eplet + '_quantity']
+        pairprob = pairing_lines.loc[row, which_impute + '_PairProb']
 
-        DRDQ_str = pairing_lines.loc[row, 'ALL_details']
-        DR_str = pairing_lines.loc[row, 'DRB_details']
-        DQ_str = pairing_lines.loc[row, 'DQ_details']
+        DRDQ_str = pairing_lines.loc[row, which_eplet + '_details']
 
         # Fill the dictionaries for counts
         if DRDQ_quant not in DRDQ_count[pair]:
             DRDQ_count[pair][DRDQ_quant] = pairprob
         else:
             DRDQ_count[pair][DRDQ_quant] = DRDQ_count[pair][DRDQ_quant] + pairprob
-        if DR_quant not in DR_count[pair]:
-            DR_count[pair][DR_quant] = pairprob
-        else:
-            DR_count[pair][DR_quant] = DR_count[pair][DR_quant] + pairprob
-        if DQ_quant not in DQ_count[pair]:
-            DQ_count[pair][DQ_quant] = pairprob
-        else:
-            DQ_count[pair][DQ_quant] = DQ_count[pair][DQ_quant] + pairprob
 
         # Fill the dictionaries for eplet strings
         if DRDQ_str not in DRDQ_eplet[pair]:
             DRDQ_eplet[pair][DRDQ_str] = pairprob
         else:
             DRDQ_eplet[pair][DRDQ_str] = DRDQ_eplet[pair][DRDQ_str] + pairprob
-        if DR_str not in DR_eplet[pair]:
-            DR_eplet[pair][DR_str] = pairprob
-        else:
-            DR_eplet[pair][DR_str] = DR_eplet[pair][DR_str] + pairprob
-        if DQ_str not in DQ_eplet[pair]:
-            DQ_eplet[pair][DQ_str] = pairprob
-        else:
-            DQ_eplet[pair][DQ_str] = DQ_eplet[pair][DQ_str] + pairprob
+
 
 # Get top counts and top eplet MMs for each level: DRDQ, DR, DQ
 top_DRDQ_eplets = pd.DataFrame()
-top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DRDQ_count, 'quantity', 'ALL')
-top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DRDQ_eplet, 'details', 'ALL')
-top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DR_count, 'quantity', 'DRB')
-top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DR_eplet, 'details', 'DRB')
-top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DQ_count, 'quantity', 'DQ')
-top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DQ_eplet, 'details', 'DQ')
+top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DRDQ_count, 'quantity', which_eplet)
+top_DRDQ_eplets = top_impute_df(top_DRDQ_eplets, DRDQ_eplet, 'details', which_eplet)
 
 top_DRDQ_eplets = top_DRDQ_eplets.reset_index(names=['ID'])
-top_DRDQ_eplets = top_DRDQ_eplets.sort_values(by=['ID']).reset_index(drop=True)
-eplet_truth = eplet_truth.sort_values(by=['ID']).reset_index(drop=True)
+top_DRDQ_eplets = top_DRDQ_eplets.sort_values(by=['ID']).reset_index(drop=True).fillna('None')
+eplet_truth = eplet_truth.sort_values(by=['ID']).reset_index(drop=True).fillna('None')
 
-class_ii_headers = ['ALL_quantity', 'ALL_details', 'DRB_quantity', 'DRB_details', 'DQ_quantity', 'DQ_details']
+class_ii_headers = [which_eplet + '_quantity', which_eplet + '_details']
 
 for line in range(len(eplet_truth)):
     for heading in class_ii_headers:
         truth_eplets = eplet_truth.loc[line, heading]
         impute_eplets = top_DRDQ_eplets.loc[line, heading]
 
-        top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplets, impute_eplets)
+        if '_details' in heading:
+            truth_eplet_list = truth_eplets.split("_")
+            truth_eplet_list.sort()
+            impute_eplet_list = impute_eplets.split("_")
+            impute_eplet_list.sort()
+            top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplet_list, impute_eplet_list)
+        else:
+            truth_eplets = int(truth_eplets)
+            impute_eplets = int(impute_eplets)
+            top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplets, impute_eplets)
 
         prob = top_DRDQ_eplets.loc[line, heading + 'Prob']
         threshold = 0.9
         if prob >= threshold:
-            top_DRDQ_eplets.loc[line, heading + '_Prediction'] = 1
+            top_DRDQ_eplets.loc[line, heading + '_Pred'] = 1
         else:
-            top_DRDQ_eplets.loc[line, heading + '_Prediction'] = 0
+            top_DRDQ_eplets.loc[line, heading + '_Pred'] = 0
 
 for heading in class_ii_headers:
     true_pred = top_DRDQ_eplets[heading + '_True'].to_numpy()  # Actual prediction in terms of 0/1
@@ -148,7 +140,7 @@ for heading in class_ii_headers:
 
     impute_sort = top_DRDQ_eplets.sort_values(by=[heading + 'Prob'])
     sort_probability = impute_sort[heading + 'Prob'].to_numpy()
-    sort_true_pred = impute_sort[heading+ '_True'].to_numpy()
+    sort_true_pred = impute_sort[heading + '_True'].to_numpy()
 
     # Create four points by taking the average in each bin
     n_bins = 4
@@ -200,24 +192,12 @@ for heading in class_ii_headers:
     num_IDs = len(top_DRDQ_eplets)
     fract_counts = counts / num_IDs  # This allows us to get the fraction (* 100 = %) of cases for each count from the histogram
 
-    if heading == 'ALL_quantity':
-        TITLE = 'DRDQ eplet counts'
-        FILE = 'DRDQ_counts_'
-    elif heading == 'ALL_details':
-        TITLE = 'DRDQ unique eplets'
-        FILE = 'DRDQ_eplets_'
-    elif heading == 'DRB_quantity':
-        TITLE = 'DR eplet counts'
-        FILE = 'DR_counts_'
-    elif heading == 'DRB_details':
-        TITLE = 'DR unique eplets'
-        FILE = 'DR_eplets_'
-    elif heading == 'DQ_quantity':
-        TITLE = 'DQ eplet counts'
-        FILE = 'DQ_counts_'
-    elif heading == 'DQ_details':
-        TITLE = 'DQ unique eplets'
-        FILE = 'DQ_eplets_'
+    if heading == which_eplet + '_quantity':
+        TITLE = which_impute + ' eplet counts'
+        FILE = which_impute + '_counts_'
+    elif heading == which_eplet + '_details':
+        TITLE = which_impute + ' unique eplets'
+        FILE = which_impute + '_eplets_'
 
     calibrat_plot = plt.figure(figsize=(8, 8))
     calibrat_plot = plt.errorbar(probability_avg, true_avg, yerr=snd_err, marker='o', linestyle='',
@@ -237,8 +217,8 @@ for heading in class_ii_headers:
     ax = plt.gca()
     ax.xaxis.set_label_position('top')  # have to add x-axis to the top because of the table at the bottom
     ax.xaxis.set_ticks_position('top')
-    ax.set_title('Calibration Plot and Prediction Probability Distribution in ' + str(n_pairs) + " pairs for " + TITLE + " \n" + 'Bin Avg MSE: ' +
+    ax.set_title('Calibration Plot and Prediction Probability Distribution in ' + n_pairs + " pairs for " + TITLE + " \n" + 'Bin Avg MSE: ' +
                  str(round(mse_bins, 4)) + ', Bin Avg City-Block Dist: ' + str(round(city_block_dst, 4)),
                  pad=20)  # Space between x-axis and title
     calibrat_plot = plt.legend()
-    calibrat_plot = plt.savefig("Calibration_" + FILE + str(n_pairs) + ".png", bbox_inches='tight')
+    calibrat_plot = plt.savefig("Calibration_" + FILE + n_pairs + ".png", bbox_inches='tight')
