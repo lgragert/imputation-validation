@@ -60,6 +60,73 @@ eplet_imptue = pd.read_csv(impute_filename, header=0)
 # Unique eplets do similar thing such as {DON+REC: {Eplet_str: prob}}
 DRDQ_count = defaultdict(dict)
 DR_count = defaultdict(dict)
+import pandas as pd
+from collections import defaultdict
+import numpy as np
+from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss
+import matplotlib.pyplot as plt
+import sys
+
+# Take the Monte Carlo output and compare the truth to the probabilities and create calibration curves
+
+
+# Reformat the Eplet Frequency dictionaries into DataFrames
+def top_impute_df(top_impute, eplet_dict, count_str, which_impute):
+    top_eplets = pd.DataFrame()
+    for ids, values in eplet_dict.items():
+        top_eplet = max(values, key=values.get)  # only want the most probable eplets
+        top_freq = values[top_eplet]             # only want the highest frequency corresponding with the eplets
+
+        line = pd.DataFrame({which_impute + "_" + count_str: top_eplet, which_impute + "_" + count_str + 'Prob': top_freq}, index=[ids])
+
+        top_eplets = pd.concat([top_eplets, line])
+
+    top_impute = pd.concat([top_impute, top_eplets], axis=1)
+
+    return top_impute
+
+
+# Count the number of incorrect predictions and then make it in terms that we use to make negative(0) and positive(1) predictions
+def neg_prediction(truth_typ, impute_typ, heading):
+    # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
+    # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
+
+    if 'details' in heading:
+        if truth_typ == impute_typ or abs(len(truth_typ) - len(impute_typ) == 1):
+            neg_count = 1
+        else:
+            neg_count = 0
+    else:
+        if truth_typ == impute_typ or abs(truth_typ - impute_typ) == 1:
+            neg_count = 1
+        else:
+            neg_count = 0
+
+    return neg_count
+
+
+n_pairs = '100'
+which_impute = 'DQ'
+truth_filename = which_impute + "_eplet_truth_table" + n_pairs + ".csv"
+eplet_truth = pd.read_csv(truth_filename, header=0)
+
+# Get all pairs from the truth table
+rand_pairs = {}
+for row in range(len(eplet_truth)):
+    pair_id = eplet_truth.loc[row, 'ID']
+
+    if pair_id not in rand_pairs:
+        rand_pairs[pair_id] = 1
+    else:
+        rand_pairs[pair_id] = rand_pairs[pair_id] + 1
+
+impute_filename = which_impute + "_eplet_lowres_impute" + n_pairs + ".csv"
+eplet_imptue = pd.read_csv(impute_filename, header=0)
+
+# Start with counts and go from there {DON+REC: {Count: prob}}
+# Unique eplets do similar thing such as {DON+REC: {Eplet_str: prob}}
+DRDQ_count = defaultdict(dict)
+DR_count = defaultdict(dict)
 DQ_count = defaultdict(dict)
 DRDQ_eplet = defaultdict(dict)
 DR_eplet = defaultdict(dict)
@@ -83,7 +150,7 @@ for pair in rand_pairs:
 
     for row in range(len(pairing_lines)):
         DRDQ_quant = pairing_lines.loc[row, which_eplet + '_quantity']
-        pairprob = pairing_lines.loc[row, which_impute + '_PairProb']
+        pairprob = pairing_lines.loc[row, 'PairProb_' + which_impute]
 
         DRDQ_str = pairing_lines.loc[row, which_eplet + '_details']
 
@@ -121,11 +188,11 @@ for line in range(len(eplet_truth)):
             truth_eplet_list.sort()
             impute_eplet_list = impute_eplets.split("_")
             impute_eplet_list.sort()
-            top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplet_list, impute_eplet_list)
+            top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplet_list, impute_eplet_list, heading)
         else:
             truth_eplets = int(truth_eplets)
             impute_eplets = int(impute_eplets)
-            top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplets, impute_eplets)
+            top_DRDQ_eplets.loc[line, heading + '_True'] = neg_prediction(truth_eplets, impute_eplets, heading)
 
         prob = top_DRDQ_eplets.loc[line, heading + 'Prob']
         threshold = 0.9
