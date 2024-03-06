@@ -26,78 +26,17 @@ def top_impute_df(top_impute, eplet_dict, count_str, which_impute):
 
 
 # Count the number of incorrect predictions and then make it in terms that we use to make negative(0) and positive(1) predictions
-def neg_prediction(truth_typ, impute_typ):
-    # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
-    # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
-
-    if truth_typ == impute_typ:
-        neg_count = 1
-    else:
-        neg_count = 0
-
-    return neg_count
-
-
-n_pairs = '100'
-which_impute = 'DRDQ'
-truth_filename = which_impute + "_eplet_truth_table" + n_pairs + ".csv"
-eplet_truth = pd.read_csv(truth_filename, header=0)
-
-# Get all pairs from the truth table
-rand_pairs = {}
-for row in range(len(eplet_truth)):
-    pair_id = eplet_truth.loc[row, 'ID']
-
-    if pair_id not in rand_pairs:
-        rand_pairs[pair_id] = 1
-    else:
-        rand_pairs[pair_id] = rand_pairs[pair_id] + 1
-
-impute_filename = which_impute + "_eplet_lowres_impute" + n_pairs + ".csv"
-eplet_imptue = pd.read_csv(impute_filename, header=0)
-
-# Start with counts and go from there {DON+REC: {Count: prob}}
-# Unique eplets do similar thing such as {DON+REC: {Eplet_str: prob}}
-DRDQ_count = defaultdict(dict)
-DR_count = defaultdict(dict)
-import pandas as pd
-from collections import defaultdict
-import numpy as np
-from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss
-import matplotlib.pyplot as plt
-import sys
-
-# Take the Monte Carlo output and compare the truth to the probabilities and create calibration curves
-
-
-# Reformat the Eplet Frequency dictionaries into DataFrames
-def top_impute_df(top_impute, eplet_dict, count_str, which_impute):
-    top_eplets = pd.DataFrame()
-    for ids, values in eplet_dict.items():
-        top_eplet = max(values, key=values.get)  # only want the most probable eplets
-        top_freq = values[top_eplet]             # only want the highest frequency corresponding with the eplets
-
-        line = pd.DataFrame({which_impute + "_" + count_str: top_eplet, which_impute + "_" + count_str + 'Prob': top_freq}, index=[ids])
-
-        top_eplets = pd.concat([top_eplets, line])
-
-    top_impute = pd.concat([top_impute, top_eplets], axis=1)
-
-    return top_impute
-
-
-# Count the number of incorrect predictions and then make it in terms that we use to make negative(0) and positive(1) predictions
 def neg_prediction(truth_typ, impute_typ, heading):
     # print ("True Genotype: " + truth_typ1 + "+" + truth_typ2)
     # print ("Top Imputed Genotype: " + impute_typ1 + "+" + impute_typ2)
 
     if 'details' in heading:
-        if truth_typ == impute_typ or abs(len(truth_typ) - len(impute_typ) == 1):
+        if truth_typ == impute_typ:
             neg_count = 1
         else:
             neg_count = 0
     else:
-        if truth_typ == impute_typ or abs(truth_typ - impute_typ) == 1:
+        if truth_typ == impute_typ:
             neg_count = 1
         else:
             neg_count = 0
@@ -138,10 +77,13 @@ elif which_impute == 'DR':
     which_eplet = 'DRB'
 else:
     which_eplet = 'DQ'
+count = 0
 for pair in rand_pairs:
     don, rec = pair.split("+")
 
     pairing_lines = eplet_imptue[(eplet_imptue['DON_ID'] == don) & (eplet_imptue['REC_ID'] == rec)]
+    if len(pairing_lines) == 0:
+        count += 1
 
     if pairing_lines.empty is True:
         pairing_lines = eplet_imptue[(eplet_imptue['DON_ID'] == rec) & (eplet_imptue['REC_ID'] == don)]
@@ -201,9 +143,14 @@ for line in range(len(eplet_truth)):
         else:
             top_DRDQ_eplets.loc[line, heading + '_Pred'] = 0
 
+brier_loss = {}
 for heading in class_ii_headers:
     true_pred = top_DRDQ_eplets[heading + '_True'].to_numpy()  # Actual prediction in terms of 0/1
     probability = top_DRDQ_eplets[heading + 'Prob'].to_numpy()  # Probability of correctness in range of [0,1] terms
+    class_prob = top_DRDQ_eplets[heading + '_Pred'].to_numpy()
+
+    # Brier Score Loss
+    brier_loss[heading] = brier_score_loss(true_pred, probability > threshold)
 
     impute_sort = top_DRDQ_eplets.sort_values(by=[heading + 'Prob'])
     sort_probability = impute_sort[heading + 'Prob'].to_numpy()
@@ -284,7 +231,8 @@ for heading in class_ii_headers:
     ax = plt.gca()
     ax.xaxis.set_label_position('top')  # have to add x-axis to the top because of the table at the bottom
     ax.xaxis.set_ticks_position('top')
-    ax.set_title('Calibration Plot and Prediction Probability Distribution in ' + n_pairs + " pairs for " + TITLE + " \n" + 'Bin Avg MSE: ' +
+    ax.set_title('Calibration Plot and Prediction Probability Distribution in ' + n_pairs + " pairs for " + TITLE + " \n" +
+                 'Brier: ' + str(round(brier_loss[heading], 4)) + ', Bin Avg MSE: ' +
                  str(round(mse_bins, 4)) + ', Bin Avg City-Block Dist: ' + str(round(city_block_dst, 4)),
                  pad=20)  # Space between x-axis and title
     calibrat_plot = plt.legend()
