@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, RocCurveDisplay
+import sys
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("ignore")
@@ -50,8 +51,9 @@ def sep_glstring(file, whichlevel):
     return file
 
 
-truth_filename = 'genotype_truth_table.csv'  # sys.argv[1]
-impute_filename = 'lowres_topprob_impute.csv'   # sys.argv[2]
+truth_filename = sys.argv[1]
+impute_filename = sys.argv[2]
+num_bins = int(sys.argv[3])  # amount of bins you want to create
 truth_table = pd.read_csv(truth_filename, header=0)
 impute = pd.read_csv(impute_filename, header=0)
 
@@ -84,7 +86,7 @@ print('Positive and Negative Predictions for Class I loci level:\n', impute_clas
 
 
 # Create Calibration Plots for each case by creating four points
-def calibration_plot(impute_typ, which_typ):
+def calibration_plot(impute_typ, which_typ, n_bins):
     if which_typ == '9loc':
         probability = impute_typ['HapPair_Prob'].to_numpy()  # Probability of correctness in [0,1] terms
         impute_sort = impute_typ.sort_values(by=['HapPair_Prob'])
@@ -99,43 +101,37 @@ def calibration_plot(impute_typ, which_typ):
     brier_loss = brier_score_loss(true_pred, probability > threshold)
     sort_true_pred = impute_sort[which_typ + '_True'].to_numpy()
 
-    n_bins = 4
-    prob_q1,prob_q2,prob_q3,prob_q4 = np.array_split(sort_probability, n_bins)
-    true_q1,true_q2,true_q3,true_q4 = np.array_split(sort_true_pred, n_bins)
-    probability_avg = [prob_q1.mean(), prob_q2.mean(), prob_q3.mean(), prob_q4.mean()]
+    # Create how many quantiles you want by taking the average in each bin
+    split_prob = np.array_split(sort_probability, n_bins)
+    split_true = np.array_split(sort_true_pred, n_bins)
+    probability_avg = [quantiles.mean() for quantiles in split_prob]
     min_prob = np.min(probability_avg)
     max_prob = np.max(probability_avg)
-    min_prob_in_bin = [np.min(prob_q1), np.min(prob_q2), np.min(prob_q3), np.min(prob_q4)]
-    max_prob_in_bin = [np.max(prob_q1), np.max(prob_q2), np.max(prob_q3), np.max(prob_q4)]
-    true_avg = [true_q1.mean(), true_q2.mean(), true_q3.mean(), true_q4.mean()]
+    min_prob_in_bin = [np.min(quantiles) for quantiles in split_prob]
+    max_prob_in_bin = [np.max(quantiles) for quantiles in split_prob]
+    true_avg = [quantiles.mean() for quantiles in split_true]
     min_true = np.min(true_avg)
 
     # Create the standard error bars for each point
-    snd_err1 = np.std(prob_q1, ddof=1) / np.sqrt(np.size(prob_q1))
-    snd_err2 = np.std(prob_q2, ddof=1) / np.sqrt(np.size(prob_q2))
-    snd_err3 = np.std(prob_q3, ddof=1) / np.sqrt(np.size(prob_q3))
-    snd_err4 = np.std(prob_q4, ddof=1) / np.sqrt(np.size(prob_q4))
-    snd_err = [snd_err1, snd_err2, snd_err3, snd_err4]
+    snd_err = [(np.std(quantiles, ddof=1) / np.sqrt(np.size(quantiles))) for quantiles in split_prob]
 
     # Compute the city-block distance between the quantiles and the diagonal (x=y)
-    city_block_dst = (abs(probability_avg[0] - true_avg[0]) + abs(probability_avg[1] - true_avg[1]) + abs(probability_avg[2] - true_avg[2]) + abs(probability_avg[3] - true_avg[3])) / n_bins
+    city_block_dst = (sum((abs(probability_avg[quantile] - true_avg[quantile]) for quantile in range(0, n_bins)))) / n_bins
 
     # Mean Squared Error (MSE) for the bin averages
-    mse_bins = np.square((abs(probability_avg[0] - true_avg[0]) + abs(probability_avg[1] - true_avg[1]) + abs(probability_avg[2] - true_avg[2]) + abs(probability_avg[3] - true_avg[3]))) / n_bins
+    mse_bins = np.square((sum((abs(probability_avg[quantile] - true_avg[quantile]) for quantile in range(0, n_bins))))) / n_bins
 
     # Create a table exactly like the print statements above to add to the bottom of the calibration plot
-    table_data = [["Quantile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"],
-                    ['Q1', str(round(probability_avg[0], 4)), str(round(true_avg[0], 4)), str(round(min_prob_in_bin[0], 4)), str(round(max_prob_in_bin[0], 4)), str(round(snd_err1, 4))],
-                    ['Q2', str(round(probability_avg[1], 4)), str(round(true_avg[1], 4)), str(round(min_prob_in_bin[1], 4)), str(round(max_prob_in_bin[1], 4)), str(round(snd_err2, 4))],
-                    ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4)), str(round(snd_err3, 4))],
-                    ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4)), str(round(snd_err4, 4))]]
+    table_data = [
+        ['Q' + str(quantiles + 1), str(round(probability_avg[quantiles], 4)), str(round(true_avg[quantiles], 4)),
+         str(round(min_prob_in_bin[quantiles], 4)), str(round(max_prob_in_bin[quantiles], 4)),
+         str(round(snd_err[quantiles], 4))] for quantiles in range(0, n_bins)]
+    heading = ["Quantile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"]
+    table_data.insert(0, heading)
 
     print('Quantile Statistics for ' + which_typ + ':')
-    print(table_data[0])
-    print(table_data[1])
-    print(table_data[2])
-    print(table_data[3])
-    print(table_data[4])
+    for quantiles in range(0,n_bins + 1):
+        print(table_data[quantiles])
 
     # Create a bar plot where it shows the distribution of predictions, have to separate it from plot so it does not get added in
     counts, bins, _ = plt.hist(sort_probability, bins=20)
@@ -170,14 +166,14 @@ def calibration_plot(impute_typ, which_typ):
 
     return calibrat_plot
 
-calibrat_plot9loc = calibration_plot(impute_9loc, '9loc')
+calibrat_plot9loc = calibration_plot(impute_9loc, '9loc', num_bins)
 calibrat_plot9loc = plt.savefig("Calibration_9loc.png", bbox_inches='tight')
 
-calibrat_plot7loc = calibration_plot(impute_7loc, '7loc')
+calibrat_plot7loc = calibration_plot(impute_7loc, '7loc', num_bins)
 calibrat_plot7loc = plt.savefig("Calibration_7loc.png", bbox_inches='tight')
 
-calibrat_plotclassI = calibration_plot(impute_classI, 'ClassI')
+calibrat_plotclassI = calibration_plot(impute_classI, 'ClassI', num_bins)
 calibrat_plotclassI = plt.savefig("Calibration_ClassI.png", bbox_inches='tight')
 
-calibrat_plotDRDQ = calibration_plot(impute_DRDQ, 'DRDQ')
+calibrat_plotDRDQ = calibration_plot(impute_DRDQ, 'DRDQ', num_bins)
 calibrat_plotDRDQ = plt.savefig("Calibration_DRDQ.png", bbox_inches='tight')
