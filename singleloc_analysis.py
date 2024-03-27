@@ -47,8 +47,8 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
     return neg_count
 
 
-truth_filename = sys.argv[1]   # 'genotype_truth_table.csv'  # sys.argv[1]
-impute_filename = sys.argv[2]  # 'lowres_topprob_impute.csv'   # sys.argv[2]
+truth_filename = sys.argv[1]
+impute_filename = sys.argv[2]
 truth_table = pd.read_csv(truth_filename, header=0)
 impute = pd.read_csv(impute_filename, header=0)
 
@@ -95,7 +95,7 @@ roc_auc = {}
 for locus in loci:
     # Need everything to be in numpy array for sklearn metrics
     probs = impute[locus + '_Prob'].to_numpy()                  # Probability of correctness in terms of 0/1
-    probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in [0,1] terms
+    probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in range of [0,1] terms
     true_pred = impute[locus + '_True'].to_numpy()              # Actual prediction in terms of 0/1
 
     # Confusion Matrix per Locus
@@ -123,44 +123,38 @@ for locus in loci:
     sort_probability = impute_sort['GENO_' + locus + '_Prob'].to_numpy()
     sort_true_pred = impute_sort[locus + '_True'].to_numpy()
 
-    # Create four points by taking the average in each bin
-    n_bins = 4
-    prob_q1,prob_q2,prob_q3,prob_q4 = np.array_split(sort_probability, n_bins)
-    true_q1,true_q2,true_q3,true_q4 = np.array_split(sort_true_pred, n_bins)
-    probability_avg = [prob_q1.mean(), prob_q2.mean(), prob_q3.mean(), prob_q4.mean()]
+    # Create how many quantiles you want by taking the average in each bin
+    n_bins = int(sys.argv[3])
+    split_prob = np.array_split(sort_probability, n_bins)
+    split_true = np.array_split(sort_true_pred, n_bins)
+    probability_avg = [quantiles.mean() for quantiles in split_prob]
     min_prob = np.min(probability_avg)
     max_prob = np.max(probability_avg)
-    min_prob_in_bin = [np.min(prob_q1), np.min(prob_q2), np.min(prob_q3), np.min(prob_q4)]
-    max_prob_in_bin = [np.max(prob_q1), np.max(prob_q2), np.max(prob_q3), np.max(prob_q4)]
-    true_avg = [true_q1.mean(), true_q2.mean(), true_q3.mean(), true_q4.mean()]
+    min_prob_in_bin = [np.min(quantiles) for quantiles in split_prob]
+    max_prob_in_bin = [np.max(quantiles) for quantiles in split_prob]
+    true_avg = [quantiles.mean() for quantiles in split_true]
     min_true = np.min(true_avg)
 
     # Create the standard error bars for each point
-    snd_err1 = np.std(prob_q1, ddof=1) / np.sqrt(np.size(prob_q1))
-    snd_err2 = np.std(prob_q2, ddof=1) / np.sqrt(np.size(prob_q2))
-    snd_err3 = np.std(prob_q3, ddof=1) / np.sqrt(np.size(prob_q3))
-    snd_err4 = np.std(prob_q4, ddof=1) / np.sqrt(np.size(prob_q4))
-    snd_err = [snd_err1, snd_err2, snd_err3, snd_err4]
+    snd_err = [(np.std(quantiles, ddof=1) / np.sqrt(np.size(quantiles))) for quantiles in split_prob]
 
     # Compute the city-block distance between the quantiles and the diagonal (x=y)
-    city_block_dst = (abs(probability_avg[0] - true_avg[0]) + abs(probability_avg[1] - true_avg[1]) + abs(probability_avg[2] - true_avg[2]) + abs(probability_avg[3] - true_avg[3])) / n_bins
+    city_block_dst = (sum((abs(probability_avg[quantile] - true_avg[quantile]) for quantile in range(0, n_bins)))) / n_bins
 
     # Mean Squared Error (MSE) for the bin averages
-    mse_bins = np.square((abs(probability_avg[0] - true_avg[0]) + abs(probability_avg[1] - true_avg[1]) + abs(probability_avg[2] - true_avg[2]) + abs(probability_avg[3] - true_avg[3]))) / n_bins
+    mse_bins = np.square((sum((abs(probability_avg[quantile] - true_avg[quantile]) for quantile in range(0, n_bins))))) / n_bins
 
     # Create a table exactly like the print statements above to add to the bottom of the calibration plot
-    table_data = [["Quantile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"],
-                  ['Q1', str(round(probability_avg[0], 4)), str(round(true_avg[0], 4)), str(round(min_prob_in_bin[0], 4)), str(round(max_prob_in_bin[0], 4)), str(round(snd_err1, 4))],
-                  ['Q2', str(round(probability_avg[1], 4)), str(round(true_avg[1], 4)), str(round(min_prob_in_bin[1], 4)), str(round(max_prob_in_bin[1], 4)), str(round(snd_err2, 4))],
-                  ['Q3', str(round(probability_avg[2], 4)), str(round(true_avg[2], 4)), str(round(min_prob_in_bin[2], 4)), str(round(max_prob_in_bin[2], 4)), str(round(snd_err3, 4))],
-                  ['Q4', str(round(probability_avg[3], 4)), str(round(true_avg[3], 4)), str(round(min_prob_in_bin[3], 4)), str(round(max_prob_in_bin[3], 4)), str(round(snd_err4, 4))]]
+    table_data = [
+        ['Q' + str(quantiles + 1), str(round(probability_avg[quantiles], 4)), str(round(true_avg[quantiles], 4)),
+         str(round(min_prob_in_bin[quantiles], 4)), str(round(max_prob_in_bin[quantiles], 4)),
+         str(round(snd_err[quantiles], 4))] for quantiles in range(0, n_bins)]
+    heading = ["Quantile", "Prob Avg", "True Fraction", "Min Prob", "Max Prob", "Standard Error"]
+    table_data.insert(0, heading)
 
     print('Quantile Statistics for Locus: ', locus)
-    print(table_data[0])
-    print(table_data[1])
-    print(table_data[2])
-    print(table_data[3])
-    print(table_data[4])
+    for quantiles in range(0, n_bins + 1):
+        print(table_data[quantiles])
 
     # Create a bar plot where it shows the distribution of predictions, have to separate it from plot so it does not get added in
     counts, bins, _ = plt.hist(sort_probability, bins=20)
@@ -172,9 +166,6 @@ for locus in loci:
     calibrat_plot = plt.plot([0,1], linestyle='--', label='Ideal Calibration', color='blue')
     calibrat_plot = plt.xlabel('Mean Predicted Probability for Quantile')
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
-    # plt.yscale('log')
-    # plt.xscale('log')
-    # calibrat_plot9loc = plt.suptitle('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" + 'Brier Score Loss: ' + str(round(brier_loss[locus], 4)) + '\n                        \n')
     calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='grey')
     calibrat_plot = plt.xlim(0,1.05)
     calibrat_plot = plt.ylim(0,1.05)
@@ -218,6 +209,4 @@ ra = pd.DataFrame({'ROC-AUC': roc_auc}, index=roc_auc.keys())
 confusion_mat = pd.concat([confusion_mat, bf], axis=1)
 confusion_mat = pd.concat([confusion_mat, ra], axis=1)
 print(confusion_mat)
-
-
 
