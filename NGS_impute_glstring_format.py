@@ -2,13 +2,14 @@
 import pandas as pd
 from collections import defaultdict
 import gzip
+import sys
 import warnings
 warnings.filterwarnings("ignore")
 import pyard
 ard = pyard.init("3520")
 
-# Clean true genoytope high resolution data to standard format
-# Pick top probability from the low resolution imputation file
+# Clean true genoytope from NGS high resolution data into standard format
+# Pick top probability from the low resolution imputation files separated by population group
 
 # Add the letter in front of typing for each loci, roll back to lgx typing, and sort it
 def add_locus(ngs, letter):
@@ -56,27 +57,19 @@ def add_locus(ngs, letter):
     return ngs
 
 
-filename = 'n217_withNGS.csv'
-ngs_file = pd.read_csv(filename, header=0)
+filename = sys.argv[1]  # High resolution NGS data file
+NGS = pd.read_csv(filename, header=0)
 
-# Grab NGS typing and donor_race columns only
-NGS = ngs_file[['unos', 'NGS_Ai', 'NGS_Aii', 'NGS_Bi', 'NGS_Bii', 'NGS_Ci', 'NGS_Cii', 'NGS_DRB1i', 'NGS_DRB1ii',
-                'NGS_DRB345i', 'NGS_DRB345ii', 'NGS_DQA1i', 'NGS_DQA1ii', 'NGS_DQB1i', 'NGS_DQB1ii',
-                'NGS_DPA1i', 'NGS_DPA1ii', 'NGS_DPB1i', 'NGS_DPB1ii', 'donorrace']]
-
-
-# Add the appropriate letters together
+# Add the appropriate letters to the right locus. This takes data that is '01:01' and turns it into 'A*01:01'
 loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
 for locus in loci:
     NGS = add_locus(NGS, locus)
 
 # Put the loci together in the GLString Format
-NGS['GLString'] = (NGS['DON_A'] + '^' + NGS['DON_B'] + '^' + NGS['DON_C'] + '^' + NGS['DON_DRB345'] + '^' + NGS['DON_DRB1'] +
+NGS['GLString'] = (NGS['DON_A'] + '^' + NGS['DON_C'] + '^' + NGS['DON_B'] + '^' + NGS['DON_DRB345'] + '^' + NGS['DON_DRB1'] +
                    '^' + NGS['DON_DQA1'] + '^' + NGS['DON_DQB1'] + '^' + NGS['DON_DPA1'] + '^' + NGS['DON_DPB1'])
 
-# # Split the race column by race and ethnicity to get it into correct format
-# NGS[['DON_RACE', 'DON_ETH']] = NGS['donorrace'].str.split(', ', expand=True)
-# NGS['DON_RACE'] = NGS['DON_RACE'].replace({'White': 'CAU', 'Hispanic/Latino': 'HIS', 'Black': 'AFA', 'Asian': 'API', 'Amer Ind/Alaska Native': 'NAM'})
+# Only keep the GLString and the ID column
 high_res = NGS[['unos', 'GLString']]
 high_res = high_res.rename(columns={'unos': 'ID'})
 
@@ -85,13 +78,18 @@ print('Duplicates in NGS: ', len(high_res[high_res.duplicated(subset='ID')]))
 high_res = high_res.drop_duplicates(subset=['ID']).reset_index(drop=True)
 print('Number of patients in NGS: ', len(high_res))
 
-high_res.to_csv('genotype_truth_table.csv', header=True, index=False)
+high_res.to_csv('genotype_truth_table.csv', header=True, index=False)  # Will use this file as the truth data
 
 
 # Take the imputation files and get the highest ranked haplotype pair probability for each patient
 pops = ['AFA', 'API', 'CAU', 'HIS', 'NAM']
 # Dict to store the multilocus with their frequency per patient
 multiloc_freq = defaultdict(dict)
+ClassI_freq = defaultdict(dict)
+DRDQ_freq = defaultdict(dict)
+DR_freq = defaultdict(dict)
+DQ_freq = defaultdict(dict)
+sevenloc_freq = defaultdict(dict)
 # Dicts to store allele level probs for genotypes
 GF_A = defaultdict(dict)
 GF_B = defaultdict(dict)
@@ -102,13 +100,9 @@ GF_DQA1 = defaultdict(dict)
 GF_DQB1 = defaultdict(dict)
 GF_DPA1 = defaultdict(dict)
 GF_DPB1 = defaultdict(dict)
-ClassI_freq = defaultdict(dict)
-DRDQ_freq = defaultdict(dict)
-DR_freq = defaultdict(dict)
-DQ_freq = defaultdict(dict)
-sevenloc_freq = defaultdict(dict)
 for pop in pops:
-    file_name = 'impute.nyulowres.' + pop + '.csv.gz'
+    file_name = sys.argv[2]
+    file_name = file_name.replace('*', pop)
     impute_outfile = gzip.open(file_name, "rt")
 
     # Overall frequency already calculated for haplo pairs in 9loc impute data, but we want to preprocess it
@@ -138,7 +132,6 @@ for pop in pops:
         (A_1, C_1, B_1, DRB345_1, DRB1_1, DQA1_1, DQB1_1, DPA1_1, DPB1_1) = hap1.split('~')
         (A_2, C_2, B_2, DRB345_2, DRB1_2, DQA1_2, DQB1_2, DPA1_2, DPB1_2) = hap2.split('~')
 
-        # happair = hap1 + '+' + hap2
         happair_freq = float(freq)
 
         # sort strings for the glstring format
@@ -162,7 +155,7 @@ for pop in pops:
         GENO_DPA1 = '+'.join([DPA1_1, DPA1_2])
         GENO_DPB1 = '+'.join([DPB1_1, DPB1_2])
 
-        happair = '^'.join([GENO_A, GENO_B, GENO_C, GENO_DRB345, GENO_DRB1, GENO_DQA1, GENO_DQB1, GENO_DPA1, GENO_DPB1])
+        happair = '^'.join([GENO_A, GENO_C, GENO_B, GENO_DRB345, GENO_DRB1, GENO_DQA1, GENO_DQB1, GENO_DPA1, GENO_DPB1])
 
         prob = happair_freq / happair_id_total[subject_id]  # For genotype probability
 
@@ -219,14 +212,14 @@ for pop in pops:
             GF_DPB1[subject_id][GENO_DPB1] = GF_DPB1[subject_id][GENO_DPB1] + prob
 
         # Create 7-loci probability
-        sevenloc = '^'.join([GENO_A, GENO_B, GENO_C, GENO_DRB345, GENO_DRB1, GENO_DQA1, GENO_DQB1])
+        sevenloc = '^'.join([GENO_A, GENO_C, GENO_B, GENO_DRB345, GENO_DRB1, GENO_DQA1, GENO_DQB1])
         if sevenloc not in sevenloc_freq[subject_id]:
             sevenloc_freq[subject_id][sevenloc] = prob
         else:
             sevenloc_freq[subject_id][sevenloc] = sevenloc_freq[subject_id][sevenloc] + prob
 
         # Create Class I probability
-        classI = '^'.join([GENO_A, GENO_B, GENO_C])
+        classI = '^'.join([GENO_A, GENO_C, GENO_B])
         if classI not in ClassI_freq[subject_id]:
             ClassI_freq[subject_id][classI] = prob
         else:
@@ -281,6 +274,8 @@ def top_impute_df(top_sl_impute, geno_dict, locus, which_impute):
 
     return top_sl_impute
 
+
+# Keeps all imputations rather than the top probability
 def all_impute(impute_all, geno_dict, which_impute):
     line_df = pd.DataFrame()
     for key, values in geno_dict.items():
@@ -299,14 +294,8 @@ def all_impute(impute_all, geno_dict, which_impute):
     return impute_all
 
 
-# For eplet MM, keep all imputations and not just the top-imputation for DR-DQ
+# For Class II eplet MM, keep all imputations and not just the top-imputation for DR-DQ
 # Keep genotype probabilities of DRB345, DRB1, DQA1, DQB1
-# for key, values in DRDQ_freq.items():
-#     ids = key
-#     for genotype, frequency in values.items():
-#         line = pd.DataFrame({'ID': ids, 'DRDQ_GLString': genotype, 'DQDR_freq': frequency}, index=[1])
-#         DRDQ_impute = pd.concat([DRDQ_impute, line]).reset_index(drop=True)
-
 DRDQ_impute = pd.DataFrame()
 DRDQ_impute = all_impute(DRDQ_impute, DRDQ_freq, 'DRDQ')
 DR_impute = pd.DataFrame()
@@ -347,9 +336,8 @@ top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DQB1, 'DQB1', 'sin
 top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DPA1, 'DPA1', 'singleloc')
 top_singleloc_impute = top_impute_df(top_singleloc_impute, GF_DPB1, 'DPB1', 'singleloc')
 
-
-top_singleloc_impute['SLUG_GLString'] = (top_singleloc_impute['GENO_A'] + '^' + top_singleloc_impute['GENO_B'] + '^' +
-                                         top_singleloc_impute['GENO_C'] + '^' + top_singleloc_impute['GENO_DRB345'] + '^' +
+top_singleloc_impute['SLUG_GLString'] = (top_singleloc_impute['GENO_A'] + '^' + top_singleloc_impute['GENO_C'] + '^' +
+                                         top_singleloc_impute['GENO_B'] + '^' + top_singleloc_impute['GENO_DRB345'] + '^' +
                                          top_singleloc_impute['GENO_DRB1'] + '^' + top_singleloc_impute['GENO_DQA1'] + '^' +
                                          top_singleloc_impute['GENO_DQB1'] + '^' + top_singleloc_impute['GENO_DPA1'] + '^' +
                                          top_singleloc_impute['GENO_DPB1'])
