@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import requests
 import time
+import sys
 
 # Create a Monte Carlo Sampling of the pairs rather than going through each of them in the API
 
@@ -15,12 +16,12 @@ def clean_eplet_str(eplet_list_df):
 
 
 # Select random pairings from the truth table
-which_impute = 'DRDQ'
-truth_filename = which_impute + '_pairs_truth.csv'
+which_impute = sys.argv[3]
+truth_filename = sys.argv[1]
 truth_pairs = pd.read_csv(truth_filename, header=0)
 
 # Start with 100 random pairs as that is what the API can handle: 100, 200, 500, 1,000... until API breaks
-n_pairs = 100
+n_pairs = int(sys.argv[4])
 n_truthpairs = truth_pairs.sample(n=n_pairs, random_state=2272024).reset_index(drop=True)  # Initialize state, to keep it consistent
 print(n_truthpairs)
 
@@ -88,7 +89,7 @@ eplet_truth_table.to_csv(which_impute + '_eplet_truth_table' + str(n_pairs) + '.
 
 
 # Run through all possibilities for those pairings in the imputation file
-impute_file = which_impute + '_pairs_imputation.csv'
+impute_file = sys.argv[2]
 impute_pairs = pd.read_csv(impute_file, header=0)
 
 n_impute_pairs = pd.DataFrame()
