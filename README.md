@@ -59,6 +59,53 @@ D13880,A*30:02+A*34:02+B*07:05+B*53:01
 Genotype List String: a grammar for describing HLA and KIR genotyping results in a text string
 https://pubmed.ncbi.nlm.nih.gov/23849068/
 
+### Formatting for all scripts to run
+All scripts mentioned below use the Genotype List String (GLString) format. Creating GLStrings from NGS data and the imputation data is done in `NGS_impute_glstring_format.py` It creates multiple files necessary for different levels of analysis.
+
+Command line prompt: `python3 NGS_impute_glstring_format.py NGS_file.csv impute_*.csv.gz`
+
+The input it expects:
+1. NGS columns needed for script:
+```
+unos,NGS_Ai,NGS_Aii,NGS_Bi,NGS_Bii,NGS_Ci,NGS_Cii,NGS_DRB1i,NGS_DRB1ii,NGS_DRB345i,NGS_DRB345ii,NGS_DQA1i,NGS_DQA1ii,NGS_DQB1i,NGS_DQB1ii,NGS_DPA1i,NGS_DPA1ii,NGS_DPB1i,NGS_DPB1ii
+
+(where unos is the ID of the subject)
+```
+2. Imputation format before GLString:
+   The imputation files are gzip CSV files and separated by population group. The * will be replaced with a population group (AFA, API, CAU, HIS, NAM) in the script.
+   
+   Header:
+```
+ID,Rank,Hap1,Hap2,HapPair_Prob
+```
+
+The different outputs and what they look like:
+1. `genotype_truth_table.csv`
+
+This script will be used as the truth table for every single analysis.
+
+An example using above IDs.
+```
+ID,GLString
+D3505,A*30:02+A*32:01^B*14:02+B*39:01
+D13880,A*30:02+A*34:02^B*07:05+B*53:01
+```
+2. `lowres_topprob_impute.csv`
+
+This takes the top probable imputation from each recipient for either SLUG or MUG analyses, but not for eplet analysis. It will have separate GLStrings for each analysis with the probability promptly after it.
+
+Header:
+```
+ID,9loc_GLString,HapPair_Prob,SLUG_GLString,GENO_A_Prob,GENO_B_Prob,GENO_C_Prob,GENO_DRB345_Prob,GENO_DRB1_Prob,GENO_DQA1_Prob,GENO_DQB1_Prob,GENO_DPA1_Prob,GENO_DPB1_Prob,7loc_GLString,7loc_Prob,ClassI_GLString,ClassI_Prob,DRDQ_GLString,DRDQ_Prob,DR_GLString,DR_Prob,DQ_GLString,DQ_Prob
+```
+3. `lowres_*_impute_csv`, where * is DRDQ, DR, or DQ. For Class II eplet-level only and keeps all probable imputations rather than the top probable.
+
+Header for each file:
+```
+ID,DRDQ_GLString,DRDQ_freq
+ID,DR_GLString,DR_freq
+ID,DQ_GLString,DQ_freq
+```
 
 ### Single Locus Unphased Genotype (SLUG) level analysis:
 
@@ -66,16 +113,118 @@ Multiple rows have the pair of alleles for a single locus.
 
 We make predictions on DPA1 and DPB1, but those loci can be ignored depending on if we have high resolution for them and want to evaluate those predictions.
 
+Command line prompt:
+```
+python3 singleloc_analysis.py genotype_truth_table.csv lowres_topprob_impute.csv quant_num
+
+(where quant_num=an integer for the number of quantiles you want to make for the calibration plots)
+```
+
+Output: 
+```
+Calibration_locus.png
+ROC_AUC_9loc.png
+Classification report print statements
+
+(where locus=A,B,C,DRB345,DRB1,DQA1,DQB1,DPA1,DPB1)
+```
+
 ### Multilocus unphased genotype (MUG) level analysis:
 
 Multiple rows have the same multilocus unphased genotype, but different phasing/haplotype arrangements. If you want to measure the ability to get the entire multilocus unphased genotype correct, you'd want to sum across those. We rarely know the haplotypes experimentally, unless we have family pedigree data.
- 
+
+This scripts makes plots for different combinations of loci such as 9-loci, 7-loci, Class I only (HLA-A,-C,-B), and DR-DQ only (HLA-DRB345, -DRB1, -DQA1, -DQB1)
+
+Command line prompt:
+```
+python3 multiloc_analysis.py genotype_truth_table.csv lowres_topprob_impute.csv quant_num
+
+(where quant_num=an integer for the number of quantiles you want to make for the calibration plots)
+```
+
+Output: 
+```
+Calibration_*.png
+
+(where *=9loc, 7loc, ClassI, DRDQ)
+```
+
 ### Amino acid level or eplet-level analysis:
 
 Finally we could test quality of predictions by single amino acid positions or eplets / amino acid motifs, by converting the allele names using HLAGenie.
 
+Eplet-Level Analysis:
 
-To test exon 1 positions, we need to gather some typing that is true two-field resolution where exon 1 was typed, we can test to see if the probabilities are well calibrated, even position by position.  NYU and Penn have some data that is true two-field typing where exon 1 was covered.  If it turns out as we expect that the predictions are poorly calibrated for the exon 1 positions, then we’ll know the TRS results for those positions are also flawed.  My hope is that the ARD positions have well-calibrated predictions even when imputing to two-field, then we won’t need to reimpute the SRTR file.
+We use the [Eplet Registry API](https://www.epregistry.com.br/), which can only handle 100 pairings at a time, so be cautious of that when creating these plots. Right now only analyzes Class II eplet mismatches.
+
+If there are no donor-recipient pairings, then you can resort to Monte-Carlo Pairings simulation. 
+
+Pipeline for the Monte-Carlo Pairings:
+1. Create simulated donor-recipient pairings for both the truth table file and the imputation file.
+
+Command line prompt:  
+```
+python3 DRDQ_pair_simulation.py genotype_truth_table.csv lowres_*_impute.csv
+
+(where *=DRDQ, DR, DQ, depending on which analyses you choose to do)
+```
+
+Output: 
+```
+*_pairs_truth.csv
+*_pairs_imputation.csv
+
+(where *=DRDQ, DR, DQ)
+```
+
+2. Random sample the simulated dataset and run only those pairs in the eplet API
+
+Command line prompt: 
+```
+python3 montecarlo_pairings.py *_pairs_truth.csv *_pairs_imputation.csv n_pairs
+
+(where *=DRDQ, DR, DQ, and n_pairs is an integer of how many pairings you want to keep)
+```
+
+Input:
+```
+*_pairs_truth.csv
+*_pairs_imputation.csv
+
+(where *=DR,DQ, or DRDQ)
+```
+
+Output:
+```
+*_pairs_truth#.csv
+*_eplet_lowres_impute#.csv
+
+(where *=DR,DQ, or DRDQ and #=number of pairs, typically 100)
+```
+
+4. Create calibration plots based on results from the eplet API.
+
+Command line prompt: 
+```
+python3 eplet_MC_analysis.py *_pairs_truth#.csv *_eplet_lowres_impute#.csv quant_num * #
+
+(where *=DR,DQ, or DRDQ and #=number of pairs, typically 100)
+(where quant_num=number of quantiles you want on the calibration plots)
+```
+
+An example would be: `python3 eplet_MC_analysis.py DRDQ_pairs_truth100.csv DRDQ_eplet_lowres_impute100.csv 4 DRDQ 100`
+
+Output: 
+```
+Calibration_*_counts_#.png
+Calibration_*_eplets_#.png
+
+(where *=DRDQ, DR, DQ, and #=number of pairs)
+```
+
+To test exon 1 positions, we need to gather some typing that is true two-field resolution where exon 1 was typed, we can test to see if the probabilities are well calibrated, even position by position.  If it turns out as we expect that the predictions are poorly calibrated for the exon 1 positions, then we’ll know the TRS results for those positions are also flawed.  My hope is that the ARD positions have well-calibrated predictions even when imputing to two-field, then we won’t need to reimpute the SRTR file.
+
+
 
 # Scikit-Learn Resources
 
@@ -162,60 +311,3 @@ One trick though is determining the threshold for calling "positive" vs "negativ
 ## Multiple Imputation
 
 If we use Rubin’s Rules for multiple imputation, the association of HLA mismatch with transplant outcomes that we compute downstream will be unbiased, because we can propagate the uncertainty in HLA assignments throughout the statistical models.
-
-
-# Datasets
-
-## Deceased donor typing data from NYU
-
-Input low resolution typing data:
-
-```
-/lustre/project/lgragert/imputation-validation/
-n217_lowres.csv
-```
-
-Imputation output :
-
-```
-/lustre/project/lgragert/imputation-validation/
-impute.nyulowres.*.csv.gz
-```
-
-True high resolution typings:
-
-```
-/lustre/project/lgragert/imputation-validation/
-n217_withNGS.csv
-```
-
-This dataset has the advantage that it is real and in the solid organ setting, even though it is small.
-
-
-## SRTR simulated dataset
-
-For the SRTR dataset the input typing was antigen-level and high resolution genotypes are unknown. However we can simulate truth using weighted random choice to validate the imputation algorithm itself.
-
-The quality of the reference population haplotype frequency estimates and alignment of the data we want to impute to the reference population data and Hardy-Weinberg equilibrium model can't be measured using this method.
-
-To create the input files needed for the Python module:
-
-1) Use the `impute.srtr.*.csv.gz` files for imputation output.
-2) Do a weighted choice draw from the haplotype pair probability distribution to select a “true” high resolution multilocus unphased genotype.
-
-
-## National Kidney Registry (NKR) Dataset
-
-50K high resolution typings in kidney transplant setting.
-
-Roll back HLA typing to antigen level to simulate how data would appear in SRTR then reimpute.
-
-TODO - Get LG onto IRB to gain access to NKR data, then run imputation on NYU cluster.
-
-
-## NMDP confirmatory typing validation datasets
-
-Mostly stem cell donors with their initial recruitment typing and their true high resolution HLA typing, typically a customized typing confirmatory typing ordered on behalf of a searching patient. There are also some random prospective high resolution typings. 
-
-TODO - Need a DUA to request dataset from Martin Maiers at NMDP. This is a large dataset (>>100,000 test cases) in stem cell transplant setting.
-
