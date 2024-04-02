@@ -222,6 +222,27 @@ Calibration_*_eplets_#.png
 (where *=DRDQ, DR, DQ, and #=number of pairs)
 ```
 
+5. Validation of the eplet-level analysis to make sure calibration is accurate. Creates histogram plots and a CSV file.
+
+Script: `eplet_validation.py`
+
+Input:
+```
+DRDQ_eplet_lowres_impute#.csv
+DR_eplet_lowres_impute#.csv
+DQ_eplet_lowres_impute#.csv
+
+(where #=number of pairs)
+```
+
+Output:
+```
+truth_impute_eplet_validation.csv
+Histo_DRDQ_absdiff.png
+Histo_DR_absdiff.png
+Histo_DQ_absdiff.png
+```
+
 To test exon 1 positions, we need to gather some typing that is true two-field resolution where exon 1 was typed, we can test to see if the probabilities are well calibrated, even position by position.  If it turns out as we expect that the predictions are poorly calibrated for the exon 1 positions, then we’ll know the TRS results for those positions are also flawed.  My hope is that the ARD positions have well-calibrated predictions even when imputing to two-field, then we won’t need to reimpute the SRTR file.
 
 
