@@ -181,17 +181,9 @@ Output:
 
 Command line prompt: 
 ```
-python3 montecarlo_pairings.py *_pairs_truth.csv *_pairs_imputation.csv n_pairs
+python3 montecarlo_pairings.py *_pairs_truth.csv *_pairs_imputation.csv * n_pairs
 
 (where *=DRDQ, DR, DQ, and n_pairs is an integer of how many pairings you want to keep)
-```
-
-Input:
-```
-*_pairs_truth.csv
-*_pairs_imputation.csv
-
-(where *=DR,DQ, or DRDQ)
 ```
 
 Output:
@@ -202,7 +194,7 @@ Output:
 (where *=DR,DQ, or DRDQ and #=number of pairs, typically 100)
 ```
 
-4. Create calibration plots based on results from the eplet API.
+3. Create calibration plots based on results from the eplet API.
 
 Command line prompt: 
 ```
@@ -222,7 +214,7 @@ Calibration_*_eplets_#.png
 (where *=DRDQ, DR, DQ, and #=number of pairs)
 ```
 
-5. Validation of the eplet-level analysis to make sure calibration is accurate. Creates histogram plots and a CSV file.
+4. Validation of the eplet-level analysis to make sure calibration is accurate. Creates histogram plots and a CSV file.
 
 Script: `eplet_validation.py`
 
