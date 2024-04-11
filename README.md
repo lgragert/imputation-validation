@@ -261,7 +261,12 @@ To test exon 1 positions, we need to gather some typing that is true two-field r
 
 Create a table of amino acid-level TRS per each position by population.
 
-Script: `typing_res_score_9loc_AA.py`
+Command line prompt:
+```
+typing_res_score_9loc_AA.py *
+
+(Where *=one population group)
+```
 
 Input:
 ```
