@@ -128,6 +128,16 @@ Classification report print statements
 
 (where locus=A,B,C,DRB345,DRB1,DQA1,DQB1,DPA1,DPB1)
 ```
+Here are two example plots outputted. The commandline prompt would be: `python3 singleloc_analysis.py genotype_truth_table.csv lowres_topprob_impute.csv 4`
+
+Calibration Plot for DQB1 locus:
+
+![Calibration_DQB1](https://github.com/lgragert/imputation-validation/assets/114109419/f14c87b1-81cb-4b49-8f3b-62c2e2187a3f)
+
+ROC Curve of DQB1 locus:
+
+![ROC_DQB1](https://github.com/lgragert/imputation-validation/assets/114109419/4d2a86cc-3fe0-4f33-b93e-0d705746b774)
+
 
 ### Multilocus unphased genotype (MUG) level analysis:
 
@@ -148,6 +158,7 @@ Calibration_*.png
 
 (where *=9loc, 7loc, ClassI, DRDQ)
 ```
+
 
 ### Amino acid level or eplet-level analysis:
 
@@ -206,6 +217,10 @@ python3 eplet_MC_analysis.py *_pairs_truth#.csv *_eplet_lowres_impute#.csv quant
 
 An example would be: `python3 eplet_MC_analysis.py DRDQ_pairs_truth100.csv DRDQ_eplet_lowres_impute100.csv 4 DRDQ 100`
 
+The plot below would be comparing the DRDQ eplet mismatch counts for 100 pairings.
+
+![Calibration_DRDQ_counts_100](https://github.com/lgragert/imputation-validation/assets/114109419/a54b54f9-5594-41f0-a24d-b653dded03ab)
+
 Output: 
 ```
 Calibration_*_counts_#.png
@@ -235,8 +250,69 @@ Histo_DR_absdiff.png
 Histo_DQ_absdiff.png
 ```
 
+Here is an example histogram of comparing the DRDQ eplet mismatch counts for the 100 pairs we had previously.
+
+![Histo_DRDQ_absdiff](https://github.com/lgragert/imputation-validation/assets/114109419/3995c7c7-6a63-44a2-b5b8-c5317cf75969)
+
 To test exon 1 positions, we need to gather some typing that is true two-field resolution where exon 1 was typed, we can test to see if the probabilities are well calibrated, even position by position.  If it turns out as we expect that the predictions are poorly calibrated for the exon 1 positions, then we’ll know the TRS results for those positions are also flawed.  My hope is that the ARD positions have well-calibrated predictions even when imputing to two-field, then we won’t need to reimpute the SRTR file.
 
+
+## The Average Typing Resolution Score (TRS) by HLA-Amino Acid Position
+
+Create a table of amino acid-level TRS per each position by population.
+
+Script: `typing_res_score_9loc_AA.py`
+
+Input:
+```
+impute.*.csv.gz
+
+(Where *=population group)
+```
+
+Output: CSV file which goes by each amino acid position per locus average for each population group.
+```
+HLA_AA_TRS_Average_*.csv
+
+Where * is the population group.
+Heading:
+Subject_Type, Ethnicity, Locus, AA_Position, TRS_Average
+```
+
+### Manhattan Plots of the Average TRS for AA Positions by Population and Subject Type
+
+Creates a visualization of the TRS by position in a Manhattan Plot.
+
+Script: `AA_TRS_Manhattan_Plot.R`
+
+Input: `SRTR_HLA_AA_TRS_Average_*.csv`, it takes all the CSV files at once.
+
+Output:
+```
+AA_TRS_Manhattan_*subj.jpg
+AA_TRS_Manhattan_*recips.jpg
+AA_TRS_Manhattan_*donors.jpg
+
+Where * = population group.
+```
+
+An example of all subject types for the CAU population group for all 9-loci.
+
+![AA_TRS_Manhattan_CAUsubj](https://github.com/lgragert/imputation-validation/assets/114109419/3a7f79a3-5adb-4e0b-9749-a37d3de7195b)
+
+
+If you would like to concatenate all Manhattan plots created, use ImageMagick.
+
+In the command line, use [ImageMagick](https://imagemagick.org/script/download.php#google_vignette) [montage](https://imagemagick.org/script/montage.php) command to put the output together vertically so you can compare across population groups. 
+
+Command line prompt:
+```
+magick montage AA_*#.jpg -tile 1x6 -geometry 5400x1200 AA_TRS_Manhat_%.jpg
+
+* is just a wild card in this scenario to get all the jpg images.
+Where # = (subj, donors, recips)
+Where % = (SUBS, DONORS, RECIPS)
+```
 
 
 # Scikit-Learn Resources
