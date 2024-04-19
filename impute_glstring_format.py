@@ -278,6 +278,6 @@ top_impute = top_impute.reset_index(names=['ID'])
 # See if GLStrings are similar for MUG and SLUG analysis
 boolean = pd.DataFrame()
 boolean['Boolean'] = top_impute['9loc_GLString'] == top_impute['SLUG_GLString']
-print('Amount of GLStrings that are the same for 9loc-MUG and SLUG: ', str(boolean['Boolean'].sum()) + "/" + '212')
+print('Amount of GLStrings that are the same for 9loc-MUG and SLUG: ', str(boolean['Boolean'].sum()) + "/" + str(len(top_impute)))
 
 top_impute.to_csv('lowres_topprob_impute.csv', header=True, index=False)
