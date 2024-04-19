@@ -60,9 +60,9 @@ Genotype List String: a grammar for describing HLA and KIR genotyping results in
 https://pubmed.ncbi.nlm.nih.gov/23849068/
 
 ### Formatting for all scripts to run
-All scripts mentioned below use the Genotype List String (GLString) format. Creating GLStrings from NGS data and the imputation data is done in `NGS_impute_glstring_format.py` It creates multiple files necessary for different levels of analysis.
+All scripts mentioned below use the Genotype List String (GLString) format. Creating GLStrings from NGS data is done in `NGS_glstring_format.py` and creating GLStrings from imputation data is done in `impute_glstring_format.py`. It creates multiple files necessary for different levels of analysis.
 
-Command line prompt: `python3 NGS_impute_glstring_format.py NGS_file.csv impute_*.csv.gz`
+Command line prompt: `python3 NGS_glstring_format.py NGS_file.csv`
 
 The input it expects:
 1. NGS columns needed for script:
@@ -71,15 +71,8 @@ unos,NGS_Ai,NGS_Aii,NGS_Bi,NGS_Bii,NGS_Ci,NGS_Cii,NGS_DRB1i,NGS_DRB1ii,NGS_DRB34
 
 (where unos is the ID of the subject)
 ```
-2. Imputation format before GLString:
-   The imputation files are gzip CSV files and separated by population group. The * will be replaced with a population group (AFA, API, CAU, HIS, NAM) in the script.
-   
-   Header:
-```
-ID,Rank,Hap1,Hap2,HapPair_Prob
-```
 
-The different outputs and what they look like:
+Output for NGS_glstring_format.py:
 1. `genotype_truth_table.csv`
 
 This script will be used as the truth table for every single analysis.
@@ -90,7 +83,20 @@ ID,GLString
 D3505,A*30:02+A*32:01^B*14:02+B*39:01
 D13880,A*30:02+A*34:02^B*07:05+B*53:01
 ```
-2. `lowres_topprob_impute.csv`
+
+Command line prompt: `python3 impute_glstring_format.py impute_*.csv.gz`
+
+The input it expects:
+1. Imputation format before GLString:
+   The imputation files are gzip CSV files and separated by population group. The * will be replaced with a population group (AFA, API, CAU, HIS, NAM) in the script.
+   
+   Header:
+```
+ID,Rank,Hap1,Hap2,HapPair_Prob
+```
+
+Output for impute_glstring_format.py:
+1. `lowres_topprob_impute.csv`
 
 This takes the top probable imputation from each recipient for either SLUG or MUG analyses, but not for eplet analysis. It will have separate GLStrings for each analysis with the probability promptly after it.
 
@@ -98,7 +104,7 @@ Header:
 ```
 ID,9loc_GLString,HapPair_Prob,SLUG_GLString,GENO_A_Prob,GENO_B_Prob,GENO_C_Prob,GENO_DRB345_Prob,GENO_DRB1_Prob,GENO_DQA1_Prob,GENO_DQB1_Prob,GENO_DPA1_Prob,GENO_DPB1_Prob,7loc_GLString,7loc_Prob,ClassI_GLString,ClassI_Prob,DRDQ_GLString,DRDQ_Prob,DR_GLString,DR_Prob,DQ_GLString,DQ_Prob
 ```
-3. `lowres_*_impute_csv`, where * is DRDQ, DR, or DQ. For Class II eplet-level only and keeps all probable imputations rather than the top probable.
+2. `lowres_*_impute_csv`, where * is DRDQ, DR, or DQ. For Class II eplet-level only and keeps all probable imputations rather than the top probable.
 
 Header for each file:
 ```
