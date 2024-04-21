@@ -60,7 +60,7 @@ Genotype List String: a grammar for describing HLA and KIR genotyping results in
 https://pubmed.ncbi.nlm.nih.gov/23849068/
 
 ### Formatting for all scripts to run
-All scripts mentioned below use the Genotype List String (GLString) format. Creating GLStrings from NGS data is done in `NGS_glstring_format.py` and creating GLStrings from imputation data is done in `impute_glstring_format.py`. It creates multiple files necessary for different levels of analysis.
+All scripts mentioned below use the Genotype List String (GLString) format. Creating the truth table from NGS data is done in `NGS_glstring_format.py`. Formatting imputation data to GLString is done in `impute_glstring_format.py` and creates multiple files necessary for different levels of analysis.
 
 Command line prompt: `python3 NGS_glstring_format.py NGS_file.csv`
 
@@ -84,11 +84,11 @@ D3505,A*30:02+A*32:01^B*14:02+B*39:01
 D13880,A*30:02+A*34:02^B*07:05+B*53:01
 ```
 
-Command line prompt: `python3 impute_glstring_format.py impute_*.csv.gz`
+Command line prompt: `python3 impute_glstring_format.py imputefile1.csv.gz imputefile2.csv.gz imputefile3.csv.gz`
 
 The input it expects:
 1. Imputation format before GLString:
-   The imputation files are gzip CSV files and separated by population group. The * will be replaced with a population group (AFA, API, CAU, HIS, NAM) in the script.
+   The imputation files are gzip CSV files and the script can take several files as arguments at once. The above prompt is an example, but you can have more than 3 files or only 1 file. The expected information between each comma is below:
    
    Header:
 ```
