@@ -8,9 +8,12 @@ warnings.filterwarnings("ignore")
 import pyard
 ard = pyard.init("3520")
 
-# Pick top probability from the low resolution imputation files separated by population group
+# Pick top probability from the low resolution imputation files
 # Take the imputation files and get the highest ranked haplotype pair probability for each patient
-pops = ['AFA', 'API', 'CAU', 'HIS', 'NAM']
+filename_list = []
+for input_file in sys.argv[1:]:
+    filename_list.append(input_file)
+
 # Dict to store the multilocus with their frequency per patient
 multiloc_freq = defaultdict(dict)
 ClassI_freq = defaultdict(dict)
@@ -28,9 +31,8 @@ GF_DQA1 = defaultdict(dict)
 GF_DQB1 = defaultdict(dict)
 GF_DPA1 = defaultdict(dict)
 GF_DPB1 = defaultdict(dict)
-for pop in pops:
-    file_name = sys.argv[1]
-    file_name = file_name.replace('*', pop)
+for filename in filename_list:
+    file_name = filename
     impute_outfile = gzip.open(file_name, "rt")
 
     # Overall frequency already calculated for haplo pairs in 9loc impute data, but we want to preprocess it
@@ -274,6 +276,7 @@ top_singleloc_impute = top_singleloc_impute[['SLUG_GLString', 'GENO_A_Prob', 'GE
 
 top_impute = pd.concat([top_9loc_impute, top_singleloc_impute, top_7loc_impute, top_classi_impute, top_drdq_impute, top_dr_impute, top_dq_impute], axis=1)
 top_impute = top_impute.reset_index(names=['ID'])
+print('Head of top imputations file: \n', top_impute.head())
 
 # See if GLStrings are similar for MUG and SLUG analysis
 boolean = pd.DataFrame()
