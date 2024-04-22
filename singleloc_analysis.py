@@ -12,13 +12,13 @@ import sys
 # Separate the GLString out into locus pairings
 def sep_glstring(file, high_res, glstring):
     if glstring == 'GLString':
-        file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
+        file[['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
         file = file.drop(columns=['GLString'])
     else:
-        file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
+        file[['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
         file = file.drop(columns=['SLUG_GLString', '9loc_GLString', 'HapPair_Prob'])
 
-    loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
+    loci = ['A', 'C', 'B', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
     for locus in loci:
         file[[locus + '_1', locus + '_2']] = file[locus].str.split('+', expand=True)
         file = file.drop(columns=[locus])
@@ -63,9 +63,9 @@ truth_table = sep_glstring(truth_table, high_res, 'GLString')
 impute = sep_glstring(impute, high_res, 'SLUG_GLString')
 
 if high_res is False:
-    loci = ['A', 'B', 'C', 'DRB1', 'DQB1']
+    loci = ['A', 'C', 'B', 'DRB1', 'DQB1']
 else:
-    loci = ['A', 'B', 'C', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
+    loci = ['A', 'C', 'B', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
 
 for line in range(len(truth_table)):
     # print ("ID: " + truth_table.loc[line, 'ID'])
