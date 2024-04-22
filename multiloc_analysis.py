@@ -61,6 +61,12 @@ truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)
 truth_table = truth_table.sort_values(by=['ID']).reset_index(drop=True)  # Sorts the patients, so each patient is in the same row as the imputation rows
 impute = impute.sort_values(by=['ID']).reset_index(drop=True)
 
+same_ids = truth_table['ID']
+impute = pd.merge(same_ids, impute, how='inner', on='ID')
+print('Amount of IDs in the imputation file: ', len(impute))
+print('Amount of IDs in the truth table file: ', len(truth_table))
+print(impute.head())
+
 # 9-loci predition use HapPair Probability
 impute_9loc = impute[['ID', '9loc_GLString', 'HapPair_Prob']]
 impute_9loc = neg_prediction(truth_table, impute_9loc, '9loc')
