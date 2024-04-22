@@ -9,9 +9,9 @@ import sys
 
 # Separate GLString for truth tables for DR-DQ genotypes
 def sep_glstring(file):
-    file[['A', 'B', 'C', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^',
+    file[['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^',
                                                                                                          expand=True)
-    file = file.drop(columns=['GLString', 'A', 'B', 'C', 'DPA1', 'DPB1'])
+    file = file.drop(columns=['GLString', 'A', 'C', 'B', 'DPA1', 'DPB1'])
 
     loci = ['DRB345', 'DRB1', 'DQA1', 'DQB1']
     for locus in loci:
