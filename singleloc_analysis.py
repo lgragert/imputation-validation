@@ -196,7 +196,6 @@ for locus in loci:
     oneloc_ROC = plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
     # # plt.show()
 
-plt.figure(1)
 for locus in loci:
     # Display ROC plots for each loci on one plot
     probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in [0,1] terms
