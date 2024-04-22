@@ -1,7 +1,7 @@
 
 import pandas as pd
 import numpy as np
-from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, roc_curve
+from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, roc_curve, RocCurveDisplay
 import matplotlib.pyplot as plt
 import sys
 
@@ -47,8 +47,8 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
     return neg_count
 
 
-truth_filename = sys.argv[1]
-impute_filename = sys.argv[2]
+truth_filename = sys.argv[1]  # 'genotype_truth_table.csv'
+impute_filename = sys.argv[2]  # 'lowres_topprob_impute.csv'
 truth_table = pd.read_csv(truth_filename, header=0)
 impute = pd.read_csv(impute_filename, header=0)
 
@@ -56,6 +56,11 @@ truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)
 truth_table = truth_table.sort_values(by=['ID']).reset_index(drop=True)  # Sorts the patients, so each patient is in the same row as the imputation rows
 impute = impute.sort_values(by=['ID']).reset_index(drop=True)
 
+same_ids = truth_table['ID']
+impute = pd.merge(same_ids, impute, how='inner', on='ID')
+print('Amount of IDs in the imputation file: ', len(impute))
+print('Amount of IDs in the truth table file: ', len(truth_table))
+print(impute.head())
 # print (truth_table)
 
 high_res = True
@@ -82,7 +87,7 @@ for line in range(len(truth_table)):
 
         # Create column for the probability taken from the probability
         probability = impute.loc[line, 'GENO_' + locus + '_Prob']
-        threshold = 0.95
+        threshold = 0.90
         if probability >= threshold:
             impute.loc[line, locus + '_Prob'] = 1
         else:
@@ -102,10 +107,10 @@ for locus in loci:
     print('Classification Report for Locus ', locus)
     # print(confusion_matrix(true_pred, probs))
     tn, fp, fn, tp = confusion_matrix(true_pred, probs).ravel()
-    # print('TP: ' + str(tp) + ', TN: ' + str(tn) + ', FP: ' + str(fp) + ', FN: ' + str(fn))
+    print('TP: ' + str(tp) + ', TN: ' + str(tn) + ', FP: ' + str(fp) + ', FN: ' + str(fn))
 
     confusion_mat_line = pd.DataFrame({'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp}, index=[locus])
-    confusion_mat = pd.concat([confusion_mat, confusion_mat_line])
+    # confusion_mat = pd.concat([confusion_mat, confusion_mat_line])
 
     # Classification Report
     print(classification_report(true_pred, probs))
@@ -166,6 +171,9 @@ for locus in loci:
     calibrat_plot = plt.plot([0,1], linestyle='--', label='Ideal Calibration', color='blue')
     calibrat_plot = plt.xlabel('Mean Predicted Probability for Quantile')
     calibrat_plot = plt.ylabel('Fraction of Predictions Correct')
+    # plt.yscale('log')
+    # plt.xscale('log')
+    # calibrat_plot9loc = plt.suptitle('Calibration Plot and Prediction Probability Distribution for HLA-' + locus + " Locus\n" + 'Brier Score Loss: ' + str(round(brier_loss[locus], 4)) + '\n                        \n')
     calibrat_plot = plt.bar(bins[:-1], fract_counts, width=np.diff(bins), edgecolor='black', color='grey')
     calibrat_plot = plt.xlim(0,1.05)
     calibrat_plot = plt.ylim(0,1.05)
@@ -183,14 +191,19 @@ for locus in loci:
 
 plt.figure(0)
 for locus in loci:
-    # Display ROC plots
+    # Display ROC plots for each loci
     probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in [0,1] terms
     true_pred = impute[locus + '_True'].to_numpy()  # Actual prediction in terms of 0/1
-    # Shows the old code for how to do one ROC per locus
-    # roc_plot = RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
-    # roc_plot = plt.title('ROC Curve and AUC for ' + locus)
-    # roc_plot = plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
+    oneloc_ROC = RocCurveDisplay.from_predictions(true_pred, probability, plot_chance_level=True)
+    oneloc_ROC = plt.title('ROC Curve and AUC for ' + locus)
+    oneloc_ROC = plt.savefig("ROC_" + locus + ".png", bbox_inches='tight')
     # # plt.show()
+
+plt.figure(1)
+for locus in loci:
+    # Display ROC plots for each loci on one plot
+    probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in [0,1] terms
+    true_pred = impute[locus + '_True'].to_numpy()
     fpr, tpr, thresholds = roc_curve(true_pred, probability)
     # Calculate Area under the curve to display on the plot
     auc = roc_auc_score(true_pred, probability)
@@ -200,7 +213,7 @@ for locus in loci:
 roc_plot = plt.plot([0, 1], 'r--', color='black')
 roc_plot = plt.xlabel('Specificity (False Positive Rate)')
 roc_plot = plt.ylabel('Sensitivity (True Positive Rate)')
-roc_plot = plt.title('ROC-AUC Curves for each Locus Predictor')
+roc_plot = plt.title('ROC-AUC Curves for each Locus in SLUG Analysis')
 roc_plot = plt.legend(loc="lower right")
 roc_plot = plt.savefig("ROC_AUC_9loc.png", bbox_inches='tight')
 
@@ -209,4 +222,3 @@ ra = pd.DataFrame({'ROC-AUC': roc_auc}, index=roc_auc.keys())
 confusion_mat = pd.concat([confusion_mat, bf], axis=1)
 confusion_mat = pd.concat([confusion_mat, ra], axis=1)
 print(confusion_mat)
-
