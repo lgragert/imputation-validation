@@ -54,8 +54,8 @@ def sep_glstring(file, whichlevel):
 truth_filename = sys.argv[1]
 impute_filename = sys.argv[2]
 num_bins = int(sys.argv[3])  # amount of bins you want to create
-truth_table = pd.read_csv(truth_filename, header=0)
-impute = pd.read_csv(impute_filename, header=0)
+truth_table = pd.read_csv(truth_filename, header=0, dtype={"ID": str})
+impute = pd.read_csv(impute_filename, header=0, dtype={"ID": str})
 
 truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)  # Makes sure they are the same length and looking at the same patients
 truth_table = truth_table.sort_values(by=['ID']).reset_index(drop=True)  # Sorts the patients, so each patient is in the same row as the imputation rows
