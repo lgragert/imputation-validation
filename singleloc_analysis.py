@@ -49,7 +49,7 @@ def neg_prediction(truth_typ1,truth_typ2,impute_typ1,impute_typ2):
 
 truth_filename = sys.argv[1]  # 'genotype_truth_table.csv'
 impute_filename = sys.argv[2]  # 'lowres_topprob_impute.csv'
-truth_table = pd.read_csv(truth_filename, header=0)
+truth_table = pd.read_csv(truth_filename, header=0, sep=',', dtype={"ID": str, "GLString": str})
 impute = pd.read_csv(impute_filename, header=0)
 
 truth_table = truth_table[truth_table.ID.isin(impute.ID)].reset_index(drop=True)  # Makes sure they are the same length and looking at the same patients
