@@ -42,9 +42,9 @@ def geno_pairs(GF_dict, don_geno, rec_geno, donID, recID, pair_ids, whichimpute)
 # Clean truth table to only have DR-DQ genotypes and the simulated donor-recipient pairs
 which_impute = sys.argv[3]   # will change this parameter from DRDQ, DR, or DQ
 truth_file = sys.argv[1]
-truth_table = pd.read_csv(truth_file, header=0)
+truth_table = pd.read_csv(truth_file, header=0, dtype={"ID": str})
 impute_file = sys.argv[2]
-impute_lowres = pd.read_csv(impute_file, header=0)
+impute_lowres = pd.read_csv(impute_file, header=0, dtype={"ID": str})
 truth_table = truth_table[truth_table.ID.isin(impute_lowres.ID)].reset_index(drop=True)
 truth_table = sep_glstring(truth_table)
 # truth_table.to_csv('DRDQ_genotype_truth_table.csv', header=False, index=False)  # not in GLString format
