@@ -47,7 +47,7 @@ def neg_prediction(truth_typ, impute_typ, heading):
 n_pairs = sys.argv[5]
 which_impute = sys.argv[4]
 truth_filename = sys.argv[1]
-eplet_truth = pd.read_csv(truth_filename, header=0)
+eplet_truth = pd.read_csv(truth_filename, header=0, dtype={"ID": str})
 
 # Get all pairs from the truth table
 rand_pairs = {}
@@ -60,7 +60,7 @@ for row in range(len(eplet_truth)):
         rand_pairs[pair_id] = rand_pairs[pair_id] + 1
 
 impute_filename = sys.argv[2]
-eplet_imptue = pd.read_csv(impute_filename, header=0)
+eplet_imptue = pd.read_csv(impute_filename, header=0, dtype={"ID": str})
 
 # Start with counts and go from there {DON+REC: {Count: prob}}
 # Unique eplets do similar thing such as {DON+REC: {Eplet_str: prob}}
