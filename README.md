@@ -166,13 +166,15 @@ Calibration_*.png
 ```
 
 
-### Amino acid level or eplet-level analysis:
+### Eplet-level analysis:
 
-Finally we could test quality of predictions by single amino acid positions or eplets / amino acid motifs, by converting the allele names using HLAGenie.
+Finally we could test quality of predictions by eplets, by converting the allele names using HLAGenie.
 
 Eplet-Level Analysis:
 
-We use the [Eplet Registry API](https://www.epregistry.com.br/), which can only handle 100 pairings at a time, so be cautious of that when creating these plots. Right now only analyzes Class II eplet mismatches.
+We use the [Eplet Registry API](https://www.epregistry.com.br/), which can only handle 100 pairings at a time, so be cautious of that when creating these plots. Right now, scripts only analyzes Class II eplet mismatches.
+
+**Notice**: Please have your own API key ready in a file to use these scripts. API key not provided in scripts. Please get in touch with the Eplet Registry for one.
 
 If there are no donor-recipient pairings, then you can resort to Monte-Carlo Pairings simulation. 
 
@@ -194,24 +196,33 @@ Output:
 (where *=DRDQ, DR, DQ)
 ```
 
-2. Random sample the simulated dataset and run only those pairs in the eplet API
+2. Random sample the simulated dataset and run only those pairs in the eplet API. `API_key.key` is a file with the eplet registry secret API key.
+
+   If you do not have an API key and cannot use the Eplet Registry API, then you may have to skip this step and continue to step 3 by doing the calculations yourself on the website.
 
 Command line prompt: 
 ```
-python3 montecarlo_pairings.py *_pairs_truth.csv *_pairs_imputation.csv * n_pairs
+python3 montecarlo_pairings.py *_pairs_truth.csv *_pairs_imputation.csv * n_pairs API_key.key
 
 (where *=DRDQ, DR, DQ, and n_pairs is an integer of how many pairings you want to keep)
 ```
 
 Output:
-```
-*_pairs_truth#.csv
-*_eplet_lowres_impute#.csv
 
-(where *=DR,DQ, or DRDQ and #=number of pairs, typically 100)
-```
+   If you cannot use the API Registry, the format of the output should be simple if you can only use the website and need to calculate it by hand. 
+   1. The first output is a CSV called `*_pairs_truth#.csv` where * = DR,DQ, or DRDQ and # = the number of pairs.
+      ```
+      HEADER FORMAT:
+      DON_ID,DON_GLString,REC_ID,REC_GLString
+      ```
+   2. The second output is a CSV called `*_eplet_lowres_impute#.csv` with the * and # does the exact same as the first output.
+      ```
+      HEADER FORMAT:
+      DON_ID,REC_ID,PairProb_DRDQ,DON_DRDQ,REC_DRDQ,ALL_quantity,ALL_details
+      Where ALL_quantity and ALL_details are lists of the total unique eplets and eplet counts from the eplet calculation. 
+      ```
 
-3. Create calibration plots based on results from the eplet API.
+4. Create calibration plots based on results from the eplet API.
 
 Command line prompt: 
 ```
