@@ -1,244 +1,218 @@
-"""Analysis classes with preprocessing support."""
+"""Analysis classes for HLA imputation validation."""
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Optional
-from .core import BaseAnalysis
-from .preprocessing import ImputationPreprocessor
-from .utils import GLStringParser
+from sklearn.metrics import confusion_matrix, brier_score_loss, roc_auc_score
 
 
-class SingleLocusAnalysis(BaseAnalysis):
-    """Single locus analysis with preprocessing support."""
+class SingleLocusAnalysis:
+    """Single locus analysis for arbitrary loci."""
 
-    def __init__(self, truth_file: str, impute_file: str,
-                 raw_imputation: bool = False, high_res: bool = True):
-        """Initialize with optional raw imputation preprocessing."""
-        if raw_imputation:
-            # Preprocess raw imputation file
-            preprocessor = ImputationPreprocessor()
-            processed_data = preprocessor.process_raw_imputation(impute_file)
-            # Use processed data instead of file
-            self.truth_data = pd.read_csv(truth_file, dtype={"ID": str})
-            self.impute_data = processed_data
-            self._align_data()
-        else:
-            super().__init__(truth_file, impute_file)
+    def __init__(self, truth_df: pd.DataFrame, impute_df: pd.DataFrame):
+        self.truth_df = truth_df.copy()
+        self.impute_df = impute_df.copy()
+        self.loci = self._detect_loci()
 
-        self.high_res = high_res
-        self.loci = self._get_available_loci()
-        self.results = {}
+    def _detect_loci(self):
+        # Detect loci from SLUG_GLString column
+        slug_example = self.impute_df.loc[0, 'SLUG_GLString']
+        loci = [allele.split('*')[0] for allele in slug_example.split('^')]
+        return loci
 
-    def _get_available_loci(self) -> List[str]:
-        """Get list of available loci from the data."""
-        all_loci = ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
-        available_loci = []
-
-        # Check which loci are available in the data
-        for locus in all_loci:
-            prob_col = f'GENO_{locus}_Prob'
-            if prob_col in self.impute_data.columns:
-                available_loci.append(locus)
-
-        # Filter by resolution if needed
-        if not self.high_res:
-            # Keep only basic loci for low resolution
-            basic_loci = ['A', 'C', 'B', 'DRB1', 'DQB1']
-            available_loci = [locus for locus in available_loci if locus in basic_loci]
-
-        return available_loci
-
-    def run_analysis(self):
-        """Run single locus analysis for all available loci."""
-        if not self.loci:
-            raise ValueError("No loci available for analysis")
-
-        # Parse GLStrings
-        parser = GLStringParser()
-        truth_parsed = parser.parse_glstring(self.truth_data, 'GLString')
-        impute_parsed = parser.parse_glstring(self.impute_data, 'SLUG_GLString')
-
+    def run(self):
+        results = {}
         for locus in self.loci:
-            # Check if locus data exists in parsed data
-            if (f'{locus}_1' in truth_parsed.columns and
-                f'{locus}_1' in impute_parsed.columns):
-                self.results[locus] = self._analyze_locus(
-                    truth_parsed, impute_parsed, locus
-                )
-
-        return self.results
-
-    def _analyze_locus(self, truth_data: pd.DataFrame,
-                       impute_data: pd.DataFrame, locus: str) -> dict:
-        """Analyze a single locus."""
-        y_true = []
-        y_prob = self.impute_data[f'GENO_{locus}_Prob'].values
-
-        for i in range(len(truth_data)):
-            truth_alleles = sorted([
-                truth_data.loc[i, f'{locus}_1'],
-                truth_data.loc[i, f'{locus}_2']
-            ])
-            impute_alleles = sorted([
-                impute_data.loc[i, f'{locus}_1'],
-                impute_data.loc[i, f'{locus}_2']
-            ])
-
-            # Perfect match = 1, otherwise 0
-            y_true.append(1 if truth_alleles == impute_alleles else 0)
-
-        y_true = np.array(y_true)
-        y_pred = (y_prob > 0.5).astype(int)
-
-        return self.calculate_metrics(y_true, y_pred, y_prob)
-
-
-class MultiLocusAnalysis(BaseAnalysis):
-    """Multi-locus unphased genotype analysis."""
-
-    def __init__(self, truth_file: str, impute_file: str, raw_imputation: bool = False):
-        """Initialize multi-locus analysis."""
-        if raw_imputation:
-            preprocessor = ImputationPreprocessor()
-            processed_data = preprocessor.process_raw_imputation(impute_file)
-            self.truth_data = pd.read_csv(truth_file, dtype={"ID": str})
-            self.impute_data = processed_data
-            self._align_data()
-        else:
-            super().__init__(truth_file, impute_file)
-
-        self.analysis_types = self._get_available_analysis_types()
-        self.results = {}
-
-    def _get_available_analysis_types(self) -> List[str]:
-        """Get available analysis types based on data columns."""
-        available_types = []
-
-        # Check what columns exist in impute_data
-        columns = set(self.impute_data.columns)
-
-        # Define required columns for each analysis type
-        analysis_requirements = {
-            '9loc': ['9loc_GLString', 'HapPair_Prob'],
-            '7loc': ['7loc_GLString', '7loc_Prob'],
-            'ClassI': ['ClassI_GLString', 'ClassI_Prob'],
-            'DRDQ': ['DRDQ_GLString', 'DRDQ_Prob'],
-            'DR': ['DR_GLString', 'DR_Prob'],
-            'DQ': ['DQ_GLString', 'DQ_Prob']
-        }
-
-        # Check which analysis types have required columns
-        for analysis_type, required_cols in analysis_requirements.items():
-            if all(col in columns for col in required_cols):
-                available_types.append(analysis_type)
-
-        # Ensure at least 2 loci for multi-locus analysis
-        if not available_types:
-            # Fallback: check if we can create basic multi-locus from available loci
-            available_types = self._create_fallback_analysis_types()
-
-        return available_types
-
-    def _create_fallback_analysis_types(self) -> List[str]:
-        """Create fallback analysis types from available single loci."""
-        available_loci = []
-        all_loci = ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
-
-        for locus in all_loci:
-            if f'GENO_{locus}_Prob' in self.impute_data.columns:
-                available_loci.append(locus)
-
-        fallback_types = []
-
-        # Create analysis types based on available loci
-        if len(available_loci) >= 9:
-            fallback_types.append('9loc')
-        if len(available_loci) >= 7:
-            fallback_types.append('7loc')
-        if set(['A', 'C', 'B']).issubset(set(available_loci)):
-            fallback_types.append('ClassI')
-        if any(locus in available_loci for locus in ['DRB345', 'DRB1', 'DQA1', 'DQB1']):
-            if len([l for l in ['DRB345', 'DRB1', 'DQA1', 'DQB1'] if l in available_loci]) >= 2:
-                fallback_types.append('DRDQ')
-
-        return fallback_types
-
-    def run_analysis(self):
-        """Run multi-locus analysis for all available types."""
-        if not self.analysis_types:
-            raise ValueError("No multi-locus analysis types available (need at least 2 loci)")
-
-        for analysis_type in self.analysis_types:
-            try:
-                self.results[analysis_type] = self._analyze_multilocus(analysis_type)
-            except KeyError as e:
-                print(f"Warning: Skipping {analysis_type} analysis due to missing data: {e}")
+            prob_col = f'GENO_{locus}_Prob'
+            if prob_col not in self.impute_df.columns:
                 continue
+            y_true = []
+            for i in range(len(self.truth_df)):
+                truth_alleles = sorted(self.truth_df.loc[i, 'GLString'].split('^')[self.loci.index(locus)].split('+'))
+                impute_alleles = sorted(self.impute_df.loc[i, 'SLUG_GLString'].split('^')[self.loci.index(locus)].split('+'))
+                y_true.append(1 if truth_alleles == impute_alleles else 0)
+            y_true = np.array(y_true)
+            y_prob = self.impute_df[prob_col].values
+            y_pred = (y_prob > 0.5).astype(int)
+            results[locus] = self._metrics(y_true, y_pred, y_prob)
+        return results
 
-        return self.results
+    def get_results_df(self):
+        """Return a dict of DataFrames with columns y_true, y_pred, y_prob for each locus."""
+        results_df = {}
+        for locus in self.loci:
+            prob_col = f'GENO_{locus}_Prob'
+            if prob_col not in self.impute_df.columns:
+                continue
+            y_true = []
+            for i in range(len(self.truth_df)):
+                truth_alleles = sorted(self.truth_df.loc[i, 'GLString'].split('^')[self.loci.index(locus)].split('+'))
+                impute_alleles = sorted(self.impute_df.loc[i, 'SLUG_GLString'].split('^')[self.loci.index(locus)].split('+'))
+                y_true.append(1 if truth_alleles == impute_alleles else 0)
+            y_true = np.array(y_true)
+            y_prob = self.impute_df[prob_col].values
+            y_pred = (y_prob > 0.5).astype(int)
+            df = pd.DataFrame({'y_true': y_true, 'y_pred': y_pred, 'y_prob': y_prob})
+            results_df[locus] = df
+        return results_df
 
-    def _analyze_multilocus(self, analysis_type: str) -> dict:
-        """Analyze multi-locus genotypes."""
-        # Get appropriate GLString column and probability
-        if analysis_type == '9loc':
-            if '9loc_GLString' in self.impute_data.columns:
-                glstring_col = '9loc_GLString'
-                prob_col = 'HapPair_Prob'
-            else:
-                glstring_col = 'SLUG_GLString'
-                prob_col = 'HapPair_Prob'
-        else:
-            glstring_col = f'{analysis_type}_GLString'
-            prob_col = f'{analysis_type}_Prob'
+    def _metrics(self, y_true, y_pred, y_prob):
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+        brier = brier_score_loss(y_true, y_prob)
+        roc_auc = roc_auc_score(y_true, y_prob)
+        return {'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn, 'brier': brier, 'roc_auc': roc_auc}
 
-        # Check if required columns exist
-        if glstring_col not in self.impute_data.columns:
-            raise KeyError(f"Missing column: {glstring_col}")
-        if prob_col not in self.impute_data.columns:
-            raise KeyError(f"Missing column: {prob_col}")
+    def pred_incorrect_high_prob(self, locus, threshold: float = 0.9):
+        """Cases above threshold where prediction was incorrect for a given locus."""
+        return self._threshold_pred_df(locus, threshold, correct=False, high=True)
 
-        # Prepare truth data based on analysis type
-        truth_glstrings = self._prepare_truth_glstrings(analysis_type)
+    def pred_incorrect_low_prob(self, locus, threshold: float = 0.9):
+        """Cases below threshold where prediction was incorrect for a given locus."""
+        return self._threshold_pred_df(locus, threshold, correct=False, high=False)
 
+    def pred_correct_high_prob(self, locus, threshold: float = 0.9):
+        """Cases above threshold where prediction was correct for a given locus."""
+        return self._threshold_pred_df(locus, threshold, correct=True, high=True)
+
+    def pred_correct_low_prob(self, locus, threshold: float = 0.9):
+        """Cases below threshold where prediction was correct for a given locus."""
+        return self._threshold_pred_df(locus, threshold, correct=True, high=False)
+
+    def _threshold_pred_df(self, locus, threshold, correct, high):
+        prob_col = f'GENO_{locus}_Prob'
+        if prob_col not in self.impute_df.columns:
+            raise ValueError(f"{prob_col} not found in imputation DataFrame.")
+        id_col = self.impute_df['ID']
         y_true = []
-        y_prob = self.impute_data[prob_col].values
-
-        for i in range(len(self.truth_data)):
-            truth_glstring = truth_glstrings.iloc[i]
-            impute_glstring = self.impute_data.loc[i, glstring_col]
-
-            y_true.append(1 if truth_glstring == impute_glstring else 0)
-
-        y_true = np.array(y_true)
-        y_pred = (y_prob > 0.5).astype(int)
-
-        return self.calculate_metrics(y_true, y_pred, y_prob)
-
-    def _prepare_truth_glstrings(self, analysis_type: str) -> pd.Series:
-        """Prepare truth GLStrings for different analysis types."""
-        parser = GLStringParser()
-
-        if analysis_type == '9loc':
-            return self.truth_data['GLString']
-        elif analysis_type == '7loc':
-            return parser.create_subset_glstring(
-                self.truth_data, ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1']
-            )
-        elif analysis_type == 'ClassI':
-            return parser.create_subset_glstring(
-                self.truth_data, ['A', 'C', 'B']
-            )
-        elif analysis_type == 'DRDQ':
-            return parser.create_subset_glstring(
-                self.truth_data, ['DRB345', 'DRB1', 'DQA1', 'DQB1']
-            )
-        elif analysis_type == 'DR':
-            return parser.create_subset_glstring(
-                self.truth_data, ['DRB345', 'DRB1']
-            )
-        elif analysis_type == 'DQ':
-            return parser.create_subset_glstring(
-                self.truth_data, ['DQA1', 'DQB1']
-            )
+        imputed_loci = []
+        true_loci = []
+        for i in range(len(self.truth_df)):
+            truth_alleles = sorted(self.truth_df.loc[i, 'GLString'].split('^')[self.loci.index(locus)].split('+'))
+            impute_alleles = sorted(self.impute_df.loc[i, 'SLUG_GLString'].split('^')[self.loci.index(locus)].split('+'))
+            y_true.append(1 if truth_alleles == impute_alleles else 0)
+            imputed_loci.append('+'.join(impute_alleles))
+            true_loci.append('+'.join(truth_alleles))
+        imp_prob = self.impute_df[prob_col]
+        concat_pred = pd.DataFrame({
+            'ID': id_col,
+            'imp_prob': imp_prob,
+            'true_pred': y_true,
+            'imputed_loci': imputed_loci,
+            'true_loci': true_loci
+        })
+        if high:
+            df = concat_pred[concat_pred['imp_prob'] >= threshold]
         else:
-            return self.truth_data['GLString']
+            df = concat_pred[concat_pred['imp_prob'] < threshold]
+        if correct:
+            return df[df['true_pred'] == 1]
+        else:
+            return df[df['true_pred'] == 0]
+
+
+class MultiLocusAnalysis:
+    """Multi-locus analysis for arbitrary sets of loci."""
+
+    def __init__(self, truth_df: pd.DataFrame, impute_df: pd.DataFrame):
+        self.truth_df = truth_df.copy()
+        self.impute_df = impute_df.copy()
+        self.analysis_types = self._detect_analysis_types()
+
+    def _detect_analysis_types(self):
+        # Detect available GLString columns for analysis
+        types = []
+        for col in self.impute_df.columns:
+            if col.endswith('_GLString'):
+                types.append(col.replace('_GLString', ''))
+        return types
+
+    def run(self):
+        results = {}
+        for analysis_type in self.analysis_types:
+            gl_col = f'{analysis_type}_GLString'
+            prob_col = f'{analysis_type}_Prob' if f'{analysis_type}_Prob' in self.impute_df.columns else 'HapPair_Prob'
+            if gl_col not in self.impute_df.columns or prob_col not in self.impute_df.columns:
+                continue
+            y_true = []
+            for i in range(len(self.truth_df)):
+                truth_gl = self.truth_df.loc[i, 'GLString']
+                impute_gl = self.impute_df.loc[i, gl_col]
+                y_true.append(1 if truth_gl == impute_gl else 0)
+            y_true = np.array(y_true)
+            y_prob = self.impute_df[prob_col].values
+            y_pred = (y_prob > 0.5).astype(int)
+            results[analysis_type] = self._metrics(y_true, y_pred, y_prob)
+        return results
+
+    def get_results_df(self):
+        """Return a dict of DataFrames with columns y_true, y_pred, y_prob for each analysis type."""
+        results_df = {}
+        for analysis_type in self.analysis_types:
+            gl_col = f'{analysis_type}_GLString'
+            prob_col = f'{analysis_type}_Prob' if f'{analysis_type}_Prob' in self.impute_df.columns else 'HapPair_Prob'
+            if gl_col not in self.impute_df.columns or prob_col not in self.impute_df.columns:
+                continue
+            y_true = []
+            for i in range(len(self.truth_df)):
+                truth_gl = self.truth_df.loc[i, 'GLString']
+                impute_gl = self.impute_df.loc[i, gl_col]
+                y_true.append(1 if truth_gl == impute_gl else 0)
+            y_true = np.array(y_true)
+            y_prob = self.impute_df[prob_col].values
+            y_pred = (y_prob > 0.5).astype(int)
+            df = pd.DataFrame({'y_true': y_true, 'y_pred': y_pred, 'y_prob': y_prob})
+            results_df[analysis_type] = df
+        return results_df
+
+    def _metrics(self, y_true, y_pred, y_prob):
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+        brier = brier_score_loss(y_true, y_prob)
+        roc_auc = roc_auc_score(y_true, y_prob)
+        return {'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn, 'brier': brier, 'roc_auc': roc_auc}
+
+    def pred_incorrect_high_prob(self, analysis_type, threshold: float = 0.9):
+        """Cases above threshold where prediction was incorrect for a given analysis type."""
+        return self._threshold_pred_df(analysis_type, threshold, correct=False, high=True)
+
+    def pred_incorrect_low_prob(self, analysis_type, threshold: float = 0.9):
+        """Cases below threshold where prediction was incorrect for a given analysis type."""
+        return self._threshold_pred_df(analysis_type, threshold, correct=False, high=False)
+
+    def pred_correct_high_prob(self, analysis_type, threshold: float = 0.9):
+        """Cases above threshold where prediction was correct for a given analysis type."""
+        return self._threshold_pred_df(analysis_type, threshold, correct=True, high=True)
+
+    def pred_correct_low_prob(self, analysis_type, threshold: float = 0.9):
+        """Cases below threshold where prediction was correct for a given analysis type."""
+        return self._threshold_pred_df(analysis_type, threshold, correct=True, high=False)
+
+    def _threshold_pred_df(self, analysis_type, threshold, correct, high):
+        gl_col = f'{analysis_type}_GLString'
+        prob_col = f'{analysis_type}_Prob' if f'{analysis_type}_Prob' in self.impute_df.columns else 'HapPair_Prob'
+        if gl_col not in self.impute_df.columns or prob_col not in self.impute_df.columns:
+            raise ValueError(f"{gl_col} or {prob_col} not found in imputation DataFrame.")
+        id_col = self.impute_df['ID']
+        y_true = []
+        imputed_loci = []
+        true_loci = []
+        for i in range(len(self.truth_df)):
+            truth_gl = self.truth_df.loc[i, 'GLString']
+            impute_gl = self.impute_df.loc[i, gl_col]
+            y_true.append(1 if truth_gl == impute_gl else 0)
+            imputed_loci.append(impute_gl)
+            true_loci.append(truth_gl)
+        imp_prob = self.impute_df[prob_col]
+        concat_pred = pd.DataFrame({
+            'ID': id_col,
+            'imp_prob': imp_prob,
+            'true_pred': y_true,
+            'imputed_loci': imputed_loci,
+            'true_loci': true_loci
+        })
+        if high:
+            df = concat_pred[concat_pred['imp_prob'] >= threshold]
+        else:
+            df = concat_pred[concat_pred['imp_prob'] < threshold]
+        if correct:
+            return df[df['true_pred'] == 1]
+        else:
+            return df[df['true_pred'] == 0]

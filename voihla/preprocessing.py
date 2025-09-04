@@ -1,177 +1,146 @@
 """Preprocessing functions to convert raw imputation data to analysis format."""
 
 import pandas as pd
-import numpy as np
-from typing import List, Dict, Set
-from .utils import GLStringParser
+from collections import defaultdict
+import gzip
+import os
 
 
 class ImputationPreprocessor:
     """Convert raw imputation data with flexible loci to analysis-ready format."""
 
+    ALL_LOCI = ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
+
     def __init__(self):
-        """Initialize preprocessor with flexible loci detection."""
-        self.standard_loci_order = ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
-        self.detected_loci = []
+        self.gf_dicts = {locus: defaultdict(dict) for locus in self.ALL_LOCI}
+        self.multiloc_freq = defaultdict(dict)
+        self.other_freqs = defaultdict(lambda: defaultdict(dict))
+        self.all_loci_found = []
 
-    def detect_loci_from_data(self, raw_file: str) -> List[str]:
-        """Detect available loci from the raw data."""
-        raw_data = pd.read_csv(raw_file)
+    def open_impute_file(self, filepath):
+        if filepath.endswith('.gz'):
+            return gzip.open(filepath, "rt")
+        else:
+            return open(filepath, "r")
 
-        # Get a sample haplotype to detect loci
-        sample_hap = raw_data.iloc[0]['Hap1']
-        detected_loci = set()
+    def process_files(self, filename_list):
+        """Process multiple imputation files to extract GLString and probabilities."""
+        for filename in filename_list:
+            impute_outfile = self.open_impute_file(filename)
+            # Detect loci from first data line (order preserved)
+            for line in impute_outfile:
+                if line.strip() == "" or line.startswith("ID"):
+                    continue
+                (_, _, hap1, _, _) = line.split(',', 4)
+                loci_in_file = [h.split('*')[0] for h in hap1.strip().split('~')]
+                for locus in loci_in_file:
+                    if locus not in self.all_loci_found:
+                        self.all_loci_found.append(locus)
+                break
+            impute_outfile.close()
 
-        parts = sample_hap.split('~')
-        for part in parts:
-            if '*' in part:
-                locus = part.split('*')[0]
-                if locus in ['DRB3', 'DRB4', 'DRB5']:
-                    detected_loci.add('DRB345')
+            # 1st pass: sum total freq per subject
+            happair_id_total = {}
+            impute_outfile = self.open_impute_file(filename)
+            for line in impute_outfile:
+                if line.strip() == "" or line.startswith("ID"):
+                    continue
+                (subject_id, _, _, _, freq) = line.split(',', 4)
+                happair_id_total.setdefault(subject_id, 0)
+                happair_id_total[subject_id] += float(freq)
+            impute_outfile.close()
+
+            # 2nd pass: process haplotype pairs
+            impute_outfile = self.open_impute_file(filename)
+            for line in impute_outfile:
+                if line.strip() == "" or line.startswith("ID"):
+                    continue
+                (subject_id, rank, hap1, hap2, freq) = line.strip().split(',', 4)
+                hap1_alleles = hap1.split('~')
+                hap2_alleles = hap2.split('~')
+                happair_freq = float(freq)
+                prob = happair_freq / happair_id_total[subject_id]
+
+                geno_locus = {}
+                for idx, locus in enumerate(loci_in_file):
+                    alleles = sorted([hap1_alleles[idx], hap2_alleles[idx]])
+                    geno_locus[locus] = '+'.join(alleles)
+
+                multiloc_glstring = '^'.join([geno_locus[locus] for locus in loci_in_file])
+                self.multiloc_freq[subject_id][multiloc_glstring] = self.multiloc_freq[subject_id].get(multiloc_glstring, 0) + happair_freq
+
+                for locus in loci_in_file:
+                    self.gf_dicts[locus][subject_id][geno_locus[locus]] = self.gf_dicts[locus][subject_id].get(geno_locus[locus], 0) + prob
+
+                # Build other combinations only if loci are present
+                sevenloc = [l for l in ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1'] if l in loci_in_file]
+                if sevenloc:
+                    sevenloc_gl = '^'.join([geno_locus[l] for l in sevenloc])
+                    self.other_freqs['sevenloc'][subject_id][sevenloc_gl] = self.other_freqs['sevenloc'][subject_id].get(sevenloc_gl, 0) + prob
+                classI = [l for l in ['A', 'C', 'B'] if l in loci_in_file]
+                if classI:
+                    classI_gl = '^'.join([geno_locus[l] for l in classI])
+                    self.other_freqs['classI'][subject_id][classI_gl] = self.other_freqs['classI'][subject_id].get(classI_gl, 0) + prob
+                drdq = [l for l in ['DRB345', 'DRB1', 'DQA1', 'DQB1'] if l in loci_in_file]
+                if drdq:
+                    drdq_gl = '^'.join([geno_locus[l] for l in drdq])
+                    self.other_freqs['DRDQ'][subject_id][drdq_gl] = self.other_freqs['DRDQ'][subject_id].get(drdq_gl, 0) + prob
+                dr = [l for l in ['DRB345', 'DRB1'] if l in loci_in_file]
+                if dr:
+                    dr_gl = '^'.join([geno_locus[l] for l in dr])
+                    self.other_freqs['DR'][subject_id][dr_gl] = self.other_freqs['DR'][subject_id].get(dr_gl, 0) + prob
+                dq = [l for l in ['DQA1', 'DQB1'] if l in loci_in_file]
+                if dq:
+                    dq_gl = '^'.join([geno_locus[l] for l in dq])
+                    self.other_freqs['DQ'][subject_id][dq_gl] = self.other_freqs['DQ'][subject_id].get(dq_gl, 0) + prob
+            impute_outfile.close()
+
+        # Helper to get top impute for any dictionary
+        def top_impute_df(top_df, geno_dict, locus, which_impute):
+            top_singleloc = pd.DataFrame()
+            for id, values in geno_dict.items():
+                top_genotype = max(values, key=values.get)
+                top_freq = values[top_genotype]
+                if which_impute == 'singleloc':
+                    line = pd.DataFrame({'GENO_' + locus: top_genotype, 'GENO_' + locus + '_Prob': top_freq}, index=[id])
+                elif which_impute == 'multiloc':
+                    line = pd.DataFrame({'GLString': top_genotype, 'HapPair_Prob': top_freq}, index=[id])
                 else:
-                    detected_loci.add(locus)
+                    line = pd.DataFrame({which_impute + '_GLString': top_genotype, which_impute + '_Prob': top_freq}, index=[id])
+                top_singleloc = pd.concat([top_singleloc, line])
+            top_df = pd.concat([top_df, top_singleloc], axis=1)
+            return top_df
 
-        # Order loci according to standard order
-        ordered_loci = [locus for locus in self.standard_loci_order if locus in detected_loci]
+        # Build top impute DataFrame for multilocus
+        top_multiloc_impute = pd.DataFrame()
+        top_multiloc_impute = top_impute_df(top_multiloc_impute, self.multiloc_freq, '', 'multiloc')
 
-        return ordered_loci
+        # Build top impute DataFrame for single loci present
+        top_singleloc_impute = pd.DataFrame()
+        for locus in self.all_loci_found:
+            if any(self.gf_dicts[locus].values()):
+                top_singleloc_impute = top_impute_df(top_singleloc_impute, self.gf_dicts[locus], locus, 'singleloc')
 
-    def process_raw_imputation(self, raw_file: str, output_file: str = None) -> pd.DataFrame:
-        """Process raw imputation file with flexible loci to analysis format."""
-        # Detect available loci first
-        self.detected_loci = self.detect_loci_from_data(raw_file)
+        # Build GLString for single locus genotype (SLUG) for present loci only (preserve order)
+        if not top_singleloc_impute.empty:
+            slug_cols = [f'GENO_{locus}' for locus in self.all_loci_found if f'GENO_{locus}' in top_singleloc_impute.columns]
+            top_singleloc_impute['SLUG_GLString'] = top_singleloc_impute[slug_cols].agg('^'.join, axis=1)
+            prob_cols = [f'GENO_{locus}_Prob' for locus in self.all_loci_found if f'GENO_{locus}_Prob' in top_singleloc_impute.columns]
+            top_singleloc_impute = top_singleloc_impute[['SLUG_GLString'] + prob_cols]
 
-        raw_data = pd.read_csv(raw_file)
-        top_predictions = raw_data.groupby('ID').first().reset_index()
+        # Build top impute DataFrames for other combinations present
+        other_top_imputes = []
+        for which in ['sevenloc', 'classI', 'DRDQ', 'DR', 'DQ']:
+            if self.other_freqs[which]:
+                df = pd.DataFrame()
+                df = top_impute_df(df, self.other_freqs[which], '', which)
+                other_top_imputes.append(df)
 
-        processed_data = self._convert_haplotypes_to_glstring(top_predictions)
-
-        if output_file:
-            processed_data.to_csv(output_file, index=False)
-
-        return processed_data
-
-    def _parse_haplotype(self, hap_string: str) -> Dict[str, str]:
-        """Parse haplotype string with flexible loci."""
-        alleles = {}
-        parts = hap_string.split('~')
-
-        for part in parts:
-            if '*' in part:
-                locus = part.split('*')[0]
-                # Handle DRB345 loci (DRB3, DRB4, DRB5)
-                if locus in ['DRB3', 'DRB4', 'DRB5']:
-                    alleles['DRB345'] = part
-                else:
-                    alleles[locus] = part
-
-        return alleles
-
-    def _create_unphased_genotype(self, hap1: Dict, hap2: Dict) -> Dict[str, List[str]]:
-        """Create unphased genotype from two haplotypes with flexible loci."""
-        genotype = {}
-
-        # Only process detected loci
-        for locus in self.detected_loci:
-            allele1 = hap1.get(locus, f'{locus}*NNNN')
-            allele2 = hap2.get(locus, f'{locus}*NNNN')
-
-            # Special handling for DRB345
-            if locus == 'DRB345':
-                if allele1.startswith('DRB345*NNNN') and not allele2.startswith('DRB345*NNNN'):
-                    allele1 = 'DRB345*NNNN'
-                elif allele2.startswith('DRB345*NNNN') and not allele1.startswith('DRB345*NNNN'):
-                    allele2 = 'DRB345*NNNN'
-
-            genotype[locus] = sorted([allele1, allele2])
-
-        return genotype
-
-    def _build_glstring(self, genotype: Dict[str, List[str]]) -> str:
-        """Build GLString from genotype dictionary with flexible loci."""
-        locus_strings = []
-
-        # Build GLString only for detected loci
-        for locus in self.detected_loci:
-            if locus in genotype:
-                locus_strings.append('+'.join(genotype[locus]))
-            else:
-                locus_strings.append(f'{locus}*NNNN+{locus}*NNNN')
-
-        return '^'.join(locus_strings)
-
-    def _create_all_subsets(self, genotype: Dict[str, List[str]],
-                           probability: float) -> Dict[str, any]:
-        """Create all possible subset GLStrings based on available loci."""
-        subsets = {}
-
-        # Define subset combinations - only include if loci are available
-        subset_definitions = {
-            'ClassI': ['A', 'C', 'B'],
-            'DRDQ': ['DRB345', 'DRB1', 'DQA1', 'DQB1'],
-            'DR': ['DRB345', 'DRB1'],
-            'DQ': ['DQA1', 'DQB1']
-        }
-
-        # Add dynamic subsets based on available loci
-        if len(self.detected_loci) >= 7:
-            subset_definitions['7loc'] = [l for l in ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1']
-                                         if l in self.detected_loci]
-
-        if len(self.detected_loci) >= 9:
-            subset_definitions['9loc'] = self.detected_loci
-
-        for subset_name, loci in subset_definitions.items():
-            # Check if we have enough loci for this subset
-            available_subset_loci = [locus for locus in loci if locus in self.detected_loci]
-
-            if len(available_subset_loci) >= 2 or subset_name in ['9loc', '7loc']:  # Multi-locus needs at least 2
-                subset_strings = []
-                for locus in available_subset_loci:
-                    if locus in genotype:
-                        subset_strings.append('+'.join(genotype[locus]))
-                    else:
-                        subset_strings.append(f'{locus}*NNNN+{locus}*NNNN')
-
-                if subset_strings:  # Only add if we have data
-                    subsets[f'{subset_name}_GLString'] = '^'.join(subset_strings)
-                    subsets[f'{subset_name}_Prob'] = probability
-
-        return subsets
-
-    def _convert_haplotypes_to_glstring(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Convert haplotypes to GLString with flexible loci."""
-        results = []
-
-        for idx, row in data.iterrows():
-            # Parse haplotype strings
-            hap1_alleles = self._parse_haplotype(row['Hap1'])
-            hap2_alleles = self._parse_haplotype(row['Hap2'])
-
-            # Create unphased genotype
-            genotype = self._create_unphased_genotype(hap1_alleles, hap2_alleles)
-
-            # Build GLString
-            glstring = self._build_glstring(genotype)
-
-            result_row = {
-                'ID': row['ID'],
-                'SLUG_GLString': glstring,
-                'HapPair_Prob': row['HapPair_Prob']
-            }
-
-            # Add full GLString if we have enough loci
-            if len(self.detected_loci) >= 9:
-                result_row['9loc_GLString'] = glstring
-
-            # Add individual locus probabilities for detected loci
-            for locus in self.detected_loci:
-                result_row[f'GENO_{locus}_Prob'] = row['HapPair_Prob']
-
-            # Add subset GLStrings and probabilities
-            subsets = self._create_all_subsets(genotype, row['HapPair_Prob'])
-            result_row.update(subsets)
-
-            results.append(result_row)
-
-        return pd.DataFrame(results)
+        # Concatenate all top impute DataFrames
+        dfs_to_concat = [df for df in [top_multiloc_impute, top_singleloc_impute] + other_top_imputes if not df.empty]
+        if dfs_to_concat:
+            top_impute = pd.concat(dfs_to_concat, axis=1)
+            top_impute = top_impute.reset_index(names=['ID'])
+            return top_impute
+        else:
+            return pd.DataFrame()

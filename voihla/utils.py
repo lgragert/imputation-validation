@@ -3,6 +3,7 @@
 import pandas as pd
 import numpy as np
 from typing import List, Union
+import warnings
 
 
 class GLStringParser:
