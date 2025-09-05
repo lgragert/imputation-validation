@@ -23,22 +23,20 @@ class MonteCarloEpletAnalysis:
         """Create random donor-recipient pairs."""
         truth_data = pd.read_csv(truth_file)
 
-        # Sample donors and recipients
         np.random.seed(random_state)
-        donor_indices = np.random.choice(len(truth_data), n_pairs, replace=True)
-        recipient_indices = np.random.choice(len(truth_data), n_pairs, replace=True)
-
         pairs = []
-        for don_idx, rec_idx in zip(donor_indices, recipient_indices):
-            if don_idx != rec_idx:  # Avoid self-pairing
-                pairs.append({
-                    'DON_ID': truth_data.iloc[don_idx]['ID'],
-                    'DON_GLString': truth_data.iloc[don_idx]['GLString'],
-                    'REC_ID': truth_data.iloc[rec_idx]['ID'],
-                    'REC_GLString': truth_data.iloc[rec_idx]['GLString']
-                })
+        while len(pairs) < n_pairs:
+            don_idx = np.random.choice(len(truth_data))
+            rec_idx = np.random.choice(len(truth_data))
+            # Allow self-pairing if needed to guarantee n_pairs
+            pairs.append({
+                'DON_ID': truth_data.iloc[don_idx]['ID'],
+                'DON_GLString': truth_data.iloc[don_idx]['GLString'],
+                'REC_ID': truth_data.iloc[rec_idx]['ID'],
+                'REC_GLString': truth_data.iloc[rec_idx]['GLString']
+            })
 
-        return pd.DataFrame(pairs[:n_pairs])
+        return pd.DataFrame(pairs)
 
     def query_eplet_api(self, donor_alleles: str,
                        recipient_alleles: str) -> Dict:

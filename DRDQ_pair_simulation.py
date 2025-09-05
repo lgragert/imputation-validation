@@ -6,7 +6,6 @@ from itertools import combinations
 import sys
 # Create pairings for the dataset of 216 subjects.
 
-
 # Separate GLString for truth tables for DR-DQ genotypes
 def sep_glstring(file):
     file[['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^',

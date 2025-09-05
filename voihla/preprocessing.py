@@ -32,8 +32,13 @@ class ImputationPreprocessor:
                 if line.strip() == "" or line.startswith("ID"):
                     continue
                 (_, _, hap1, _, _) = line.split(',', 4)
-                loci_in_file = [h.split('*')[0] for h in hap1.strip().split('~')]
-                for locus in loci_in_file:
+                loci_in_file = []
+                for h in hap1.strip().split('~'):
+                    locus = h.split('*')[0]
+                    # Map DRB3/4/5/X to DRB345
+                    if locus.startswith('DRB3') or locus.startswith('DRB4') or locus.startswith('DRB5') or locus.startswith('DRBX'):
+                        locus = 'DRB345'
+                    loci_in_file.append(locus)
                     if locus not in self.all_loci_found:
                         self.all_loci_found.append(locus)
                 break
@@ -72,27 +77,18 @@ class ImputationPreprocessor:
                 for locus in loci_in_file:
                     self.gf_dicts[locus][subject_id][geno_locus[locus]] = self.gf_dicts[locus][subject_id].get(geno_locus[locus], 0) + prob
 
-                # Build other combinations only if loci are present
-                sevenloc = [l for l in ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1'] if l in loci_in_file]
-                if sevenloc:
-                    sevenloc_gl = '^'.join([geno_locus[l] for l in sevenloc])
-                    self.other_freqs['sevenloc'][subject_id][sevenloc_gl] = self.other_freqs['sevenloc'][subject_id].get(sevenloc_gl, 0) + prob
-                classI = [l for l in ['A', 'C', 'B'] if l in loci_in_file]
-                if classI:
-                    classI_gl = '^'.join([geno_locus[l] for l in classI])
-                    self.other_freqs['classI'][subject_id][classI_gl] = self.other_freqs['classI'][subject_id].get(classI_gl, 0) + prob
-                drdq = [l for l in ['DRB345', 'DRB1', 'DQA1', 'DQB1'] if l in loci_in_file]
-                if drdq:
-                    drdq_gl = '^'.join([geno_locus[l] for l in drdq])
-                    self.other_freqs['DRDQ'][subject_id][drdq_gl] = self.other_freqs['DRDQ'][subject_id].get(drdq_gl, 0) + prob
-                dr = [l for l in ['DRB345', 'DRB1'] if l in loci_in_file]
-                if dr:
-                    dr_gl = '^'.join([geno_locus[l] for l in dr])
-                    self.other_freqs['DR'][subject_id][dr_gl] = self.other_freqs['DR'][subject_id].get(dr_gl, 0) + prob
-                dq = [l for l in ['DQA1', 'DQB1'] if l in loci_in_file]
-                if dq:
-                    dq_gl = '^'.join([geno_locus[l] for l in dq])
-                    self.other_freqs['DQ'][subject_id][dq_gl] = self.other_freqs['DQ'][subject_id].get(dq_gl, 0) + prob
+                # Only create multilocus categories if all required loci are present
+                required_sets = {
+                    'sevenloc': ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1'],
+                    'classI': ['A', 'C', 'B'],
+                    'DRDQ': ['DRB345', 'DRB1', 'DQA1', 'DQB1'],
+                    'DR': ['DRB345', 'DRB1'],
+                    'DQ': ['DQA1', 'DQB1'],
+                }
+                for which, required_loci in required_sets.items():
+                    if all(l in loci_in_file for l in required_loci):
+                        gl = '^'.join([geno_locus[l] for l in required_loci])
+                        self.other_freqs[which][subject_id][gl] = self.other_freqs[which][subject_id].get(gl, 0) + prob
             impute_outfile.close()
 
         # Helper to get top impute for any dictionary
