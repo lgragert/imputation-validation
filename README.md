@@ -8,8 +8,13 @@ The `voihla` package provides tools to preprocess, analyze, and visualize HLA im
 
 ## Installation
 
-Install dependencies using pip:
+Clone the Github repository and navigate to the project directory:
+``` bash
+git clone git@github.com:lgragert/imputation-validation.git
 ```
+
+Install dependencies using pip:
+```bash
 pip install -r requirements.txt
 ```
 
@@ -66,45 +71,73 @@ Convert raw imputation files to analysis-ready format:
 from voihla.preprocessing import ImputationPreprocessor
 
 preprocessor = ImputationPreprocessor()
-top_impute = preprocessor.process_files(['imputation.csv'])
+top_impute = preprocessor.process_files(['imputation.csv']) # Can pass multiple files in a list
 top_impute.to_csv('lowres_topprob_impute.csv', index=False)
 ```
+
+This will create a variable that will have every GLString in the imputation file ready for SLUG and MUG analyses depending on how many loci are avaialble in your file.
+
 ### Single-Locus Analysis
-```
+```Python
 import pandas as pd
 from voihla.analysis import SingleLocusAnalysis
 from voihla.preprocessing import ImputationPreprocessor
 
 preprocessor = ImputationPreprocessor()
 impute_df = preprocessor.process_files(['imputation.csv'])
-truth_df = pd.read_csv('truth_table.csv')
+truth_df = pd.read_csv('truth_table.csv')  # If your truth table is in a clean format then you just need to create a DataFrame
 analysis = SingleLocusAnalysis(truth_df, impute_df)
-results = analysis.run()
+results = analysis.get_results_df()
 print(results)
 ```
+
+The `results` DataFrame will contain the the variables required for Calibration plots.
+
+y_true = if the imputation matches the truth table then 1, otherwise 0.
+
+y_pred = the confidence of the imputation prediction being correct 1, otherwise 0 (threshold is 0.5 and can be changed).
+
+y_prob = the actual probability of the imputation.
 
 ### Multilocus Analysis
-```
-from voihla.analysis import MultiLocusAnalysis
+```Python
+from voihla import ImputationPreprocessor, MultiLocusAnalysis
+import pandas as pd
 
+preprocessor = ImputationPreprocessor()
+impute_df = preprocessor.process_files(['imputation.csv'])
+truth_df = pd.read_csv('truth_table.csv') 
 analysis = MultiLocusAnalysis(truth_df, impute_df)
-results = analysis.run()
+results = analysis.get_results_df()
 print(results)
 ```
+The `results` DataFrame will contain the the variables required for Calibration plots.
+
+y_true = if the imputation matches the truth table then 1, otherwise 0.
+
+y_pred = the confidence of the imputation prediction being correct 1, otherwise 0 (threshold is 0.5 and can be changed).
+
+y_prob = the actual probability of the imputation.
+
 
 ### Calibration Plots
-```
+
+Calibration plots can be generated using the `CalibrationPlotter` class from the `voihla.plotting` module.
+
+Can take either SingleLocusAnalysis or MultiLocusAnalysis results DataFrame as input.
+
+``` Python
 from voihla.plotting import CalibrationPlotter
 
 plotter = CalibrationPlotter(n_bins=4)
 locus = 'A'
 df = analysis.get_results_df()[locus]
-fig = plotter.calibration_plot(df['y_true'], df['y_prob'], f'Calibration {locus}')
-fig.savefig(f'Calibration_{locus}.png')
+fig = plotter.calibration_plot(analysis_results=df, title=f'Calibration {locus}', save_path=f'Calibration_{locus}.png')
 ```
 
 ### Eplet-Level Analysis
-```
+Still a work in progress, but you can use the following code to get simulated pairs for now.
+```python
 from voihla.eplet import MonteCarloEpletAnalysis
 
 eplet_analysis = MonteCarloEpletAnalysis(api_key='YOUR_API_KEY')
