@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report, brier_score_loss, roc_auc_score, roc_curve, RocCurveDisplay
@@ -10,24 +9,45 @@ import sys
 
 
 # Separate the GLString out into locus pairings
-def sep_glstring(file, high_res, glstring):
+def sep_glstring(file, high_res, glstring, loci=None):
+    # If loci not provided, try to infer from columns
+    if loci is None:
+        # Try to infer loci from GLString columns
+        if glstring == 'GLString':
+            split_cols = file['GLString'].str.split('^', expand=True)
+        else:
+            split_cols = file['SLUG_GLString'].str.split('^', expand=True)
+        # Use number of columns to infer loci
+        default_loci = ['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
+        loci = default_loci[:split_cols.shape[1]]
+
+    # Split GLString into loci columns
     if glstring == 'GLString':
-        file[['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['GLString'].str.split('^', expand=True)
+        file[loci] = file['GLString'].str.split('^', expand=True)
         file = file.drop(columns=['GLString'])
     else:
-        file[['A', 'C', 'B', 'DRB345', 'DRB1', 'DQA1', 'DQB1', 'DPA1', 'DPB1']] = file['SLUG_GLString'].str.split('^', expand=True)
-        file = file.drop(columns=['SLUG_GLString', '9loc_GLString', 'HapPair_Prob'])
+        file[loci] = file['SLUG_GLString'].str.split('^', expand=True)
+        file = file.drop(columns=['SLUG_GLString'])
+        # Drop columns that may not exist
+        for col in ['9loc_GLString', 'HapPair_Prob']:
+            if col in file.columns:
+                file = file.drop(columns=[col])
 
-    loci = ['A', 'C', 'B', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
+    # Split alleles for each locus
     for locus in loci:
         file[[locus + '_1', locus + '_2']] = file[locus].str.split('+', expand=True)
         file = file.drop(columns=[locus])
 
-    # If your genotype truth table is not actually high resolution, then drop DPA1 and DPB1
+    # If your genotype truth table is not actually high resolution, then drop extra loci
     if high_res is False:
-        file = file.drop(columns=['DRB345_1', 'DRB345_2', 'DQA1_1', 'DQA1_2', 'DPA1_1', 'DPA1_2', 'DPB1_1', 'DPB1_2'])
+        keep_loci = ['A', 'C', 'B', 'DRB1', 'DQB1']
+        drop_loci = [l for l in loci if l not in keep_loci]
+        drop_cols = []
+        for locus in drop_loci:
+            drop_cols += [locus + '_1', locus + '_2']
+        file = file.drop(columns=drop_cols, errors='ignore')
 
-    return file
+    return file, loci
 
 
 # Count the number of incorrect predictions and then make it in terms that we use to make negative(0) and positive(1) predictions
@@ -61,16 +81,31 @@ truth_table = truth_table.drop_duplicates().reset_index(drop=True)
 print(len(truth_table))
 
 high_res = True
-truth_table = sep_glstring(truth_table, high_res, 'GLString')
-impute = sep_glstring(impute, high_res, 'SLUG_GLString')
 
-if high_res is False:
-    loci = ['A', 'C', 'B', 'DRB1', 'DQB1']
-else:
-    loci = ['A', 'C', 'B', 'DRB1', 'DRB345', 'DQA1', 'DQB1', 'DPA1', 'DPB1']
+# Dynamically detect loci from impute file columns
+slug_cols = [col for col in impute.columns if col.startswith('GENO_') and col.endswith('_Prob')]
+loci = [col.replace('GENO_', '').replace('_Prob', '') for col in slug_cols]
+
+# Parse GLStrings for only present loci
+truth_table, loci_truth = sep_glstring(truth_table, high_res, 'GLString', loci)
+impute, loci_impute = sep_glstring(impute, high_res, 'SLUG_GLString', loci)
+
+# Use intersection of loci present in both files
+loci = [l for l in loci if l in loci_truth and l in loci_impute]
+
+# Filter loci to only those with non-missing allele columns in both truth and impute
+filtered_loci = []
+for locus in loci:
+    truth_cols = [locus + '_1', locus + '_2']
+    impute_cols = [locus + '_1', locus + '_2', 'GENO_' + locus + '_Prob']
+    # Check columns exist and are not all missing
+    if all(col in truth_table.columns for col in truth_cols) and all(col in impute.columns for col in impute_cols):
+        # Check for at least one non-missing value
+        if not (truth_table[truth_cols].isnull().all().any() or impute[impute_cols].isnull().all().any()):
+            filtered_loci.append(locus)
+loci = filtered_loci
 
 for line in range(len(truth_table)):
-    # print ("ID: " + truth_table.loc[line, 'ID'])
     for locus in loci:
         truth1 = truth_table.loc[line, locus + '_1']
         truth2 = truth_table.loc[line, locus + '_2']
@@ -82,7 +117,6 @@ for line in range(len(truth_table)):
 
         impute.loc[line, locus + '_True'] = neg_prediction(truth1, truth2, impute1, impute2)
 
-        # Create column for the probability taken from the probability
         probability = impute.loc[line, 'GENO_' + locus + '_Prob']
         threshold = 0.90
         if probability >= threshold:
@@ -96,21 +130,32 @@ brier_loss = {}
 roc_auc = {}
 for locus in loci:
     # Need everything to be in numpy array for sklearn metrics
-    probs = impute[locus + '_Prob'].to_numpy()                  # Probability of correctness in terms of 0/1
-    probability = impute['GENO_' + locus + '_Prob'].to_numpy()  # Probability of correctness in range of [0,1] terms
-    true_pred = impute[locus + '_True'].to_numpy()              # Actual prediction in terms of 0/1
+    probs = impute[locus + '_Prob'].to_numpy()
+    probability = impute['GENO_' + locus + '_Prob'].to_numpy()
+    true_pred = impute[locus + '_True'].to_numpy()
 
-    # Confusion Matrix per Locus
     print('Classification Report for Locus ', locus)
-    # print(confusion_matrix(true_pred, probs))
-    tn, fp, fn, tp = confusion_matrix(true_pred, probs).ravel()
+    cm = confusion_matrix(true_pred, probs, labels=[0, 1])
+    if cm.shape == (2, 2):
+        tn, fp, fn, tp = cm.ravel()
+    else:
+        tn = fp = fn = tp = 0
+        if cm.shape == (1, 1):
+            if np.unique(true_pred)[0] == 1:
+                tp = cm[0, 0]
+            else:
+                tn = cm[0, 0]
+        elif cm.shape == (1, 2):
+            tn, fp = cm[0, 0], cm[0, 1]
+        elif cm.shape == (2, 1):
+            tn, fn = cm[0, 0], cm[1, 0]
     print('TP: ' + str(tp) + ', TN: ' + str(tn) + ', FP: ' + str(fp) + ', FN: ' + str(fn))
 
     confusion_mat_line = pd.DataFrame({'TN': tn, 'FP': fp, 'FN': fn, 'TP': tp}, index=[locus])
     # confusion_mat = pd.concat([confusion_mat, confusion_mat_line])
 
     # Classification Report
-    print(classification_report(true_pred, probs))
+    print(classification_report(true_pred, probs, labels=[0, 1]))
 
     # Brier Score Loss
     brier_loss[locus] = brier_score_loss(true_pred, probability > threshold)
