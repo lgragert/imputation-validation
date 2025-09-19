@@ -15,7 +15,7 @@ git clone git@github.com:lgragert/imputation-validation.git
 
 Install dependencies using pip:
 ```bash
-pip install -r requirements.txt
+pip install .
 ```
 
 ## Example Input Files

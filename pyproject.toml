@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voihla"
+version = "0.1.0"
+description = "HLA Imputation Validation Package"
+authors = [{name = "Alyssa Paynter", email = "apaynter@tulane.edu"}]
+dependencies = ["pandas>=1.3.0",
+    "numpy>=1.20.0",
+    "scikit-learn>=1.0.0",
+    "matplotlib>=3.3.0",
+    "requests>=2.25.0",
+    "py-ard>=1.0.0"]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
