@@ -8,14 +8,9 @@ The `voihla` package provides tools to preprocess, analyze, and visualize HLA im
 
 ## Installation
 
-Clone the Github repository and navigate to the project directory:
-``` bash
-git clone git@github.com:lgragert/imputation-validation.git
-```
-
-Install dependencies using pip:
+Install package and dependencies via pip:
 ```bash
-pip install .
+pip install voihla
 ```
 
 ## Example Input Files
