@@ -90,7 +90,10 @@ class SingleLocusAnalysis:
     def _metrics(self, y_true, y_pred, y_prob):
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
         brier = brier_score_loss(y_true, y_prob)
-        roc_auc = roc_auc_score(y_true, y_prob)
+        try:
+            roc_auc = roc_auc_score(y_true, y_prob)
+        except ValueError:
+            roc_auc = np.nan
         return {'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn, 'brier': brier, 'roc_auc': roc_auc}
 
     def pred_incorrect_high_prob(self, locus, threshold: float = 0.9):
@@ -280,7 +283,10 @@ class MultiLocusAnalysis:
     def _metrics(self, y_true, y_pred, y_prob):
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
         brier = brier_score_loss(y_true, y_prob)
-        roc_auc = roc_auc_score(y_true, y_prob)
+        try:
+            roc_auc = roc_auc_score(y_true, y_prob)
+        except ValueError:
+            roc_auc = np.nan
         return {'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn, 'brier': brier, 'roc_auc': roc_auc}
 
     def pred_incorrect_high_prob(self, analysis_type, threshold: float = 0.9):
@@ -300,7 +306,7 @@ class MultiLocusAnalysis:
         return self._threshold_pred_df(analysis_type, threshold, correct=True, high=False)
 
     def _threshold_pred_df(self, analysis_type, threshold, correct, high):
-        gl_col = f'{analysis_type}_GLString'
+        gl_col = 'GLString' if analysis_type == 'multiloc' else f'{analysis_type}_GLString'
         prob_col = f'{analysis_type}_Prob' if f'{analysis_type}_Prob' in self.impute_df.columns else 'HapPair_Prob'
         if gl_col not in self.impute_df.columns or prob_col not in self.impute_df.columns:
             raise ValueError(f"{gl_col} or {prob_col} not found in imputation DataFrame.")

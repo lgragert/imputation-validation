@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voihla"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python package for HLA imputation validation metrics using scikit-learn"
 authors = [{name = "Alyssa Paynter", email = "apaynter@tulane.edu"}]
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",

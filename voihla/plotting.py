@@ -11,7 +11,7 @@ class CalibrationPlotter:
     def __init__(self, n_bins: int = 4):
         self.n_bins = n_bins
 
-    def calibration_plot(self, analysis_results, locus, threshold=0.9, title=None, save_path=None):
+    def calibration_plot(self, analysis_results, locus='overall', threshold=0.9, title=None, save_path=None):
         # Extract relevant columns
         preds = analysis_results['y_pred'].to_numpy()  # Binary prediction (0/1)
         probability = analysis_results['y_prob'].to_numpy() # Predicted probability
@@ -30,11 +30,14 @@ class CalibrationPlotter:
         print(classification_report(true_pred, preds))
 
         # Brier Score Loss
-        brier = brier_score_loss(true_pred, probability > threshold)
+        brier = brier_score_loss(true_pred, probability)
         print('Brier Score Loss:', brier)
 
         # ROC-AUC Score
-        roc_auc = roc_auc_score(true_pred, probability)
+        try:
+            roc_auc = roc_auc_score(true_pred, probability)
+        except ValueError:
+            roc_auc = np.nan
         print('ROC-AUC Score:', roc_auc)
 
         # Sort the Dataset based on probabilities
@@ -50,7 +53,10 @@ class CalibrationPlotter:
         min_prob_in_bin = [np.min(quantiles) for quantiles in split_prob]
         max_prob_in_bin = [np.max(quantiles) for quantiles in split_prob]
         true_avg = [quantiles.mean() for quantiles in split_true]
-        snd_err = [(np.std(quantiles, ddof=1) / np.sqrt(np.size(quantiles))) for quantiles in split_prob]
+        snd_err = [
+            (np.std(quantiles, ddof=1) / np.sqrt(np.size(quantiles))) if np.size(quantiles) > 1 else 0.0
+            for quantiles in split_prob
+        ]
         city_block_dst = sum(abs(np.array(probability_avg) - np.array(true_avg))) / n_bins
         mse_bins = np.square(sum(abs(np.array(probability_avg) - np.array(true_avg)))) / n_bins
 

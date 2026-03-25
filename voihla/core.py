@@ -19,16 +19,20 @@ class BaseAnalysis:
 
     def _align_data(self):
         """Align truth and imputation data by ID."""
-        # Keep only common IDs
-        common_ids = self.truth_data['ID'].isin(self.impute_data['ID'])
-        self.truth_data = self.truth_data[common_ids].reset_index(drop=True)
-
-        # Sort both by ID
-        self.truth_data = self.truth_data.sort_values('ID').reset_index(drop=True)
-        self.impute_data = self.impute_data.sort_values('ID').reset_index(drop=True)
-
-        # Remove duplicates
-        self.truth_data = self.truth_data.drop_duplicates().reset_index(drop=True)
+        # Keep only common IDs in both frames and ensure one row per ID.
+        common_ids = sorted(set(self.truth_data['ID']).intersection(set(self.impute_data['ID'])))
+        self.truth_data = (
+            self.truth_data[self.truth_data['ID'].isin(common_ids)]
+            .drop_duplicates(subset=['ID'])
+            .sort_values('ID')
+            .reset_index(drop=True)
+        )
+        self.impute_data = (
+            self.impute_data[self.impute_data['ID'].isin(common_ids)]
+            .drop_duplicates(subset=['ID'])
+            .sort_values('ID')
+            .reset_index(drop=True)
+        )
 
     def calculate_metrics(self, y_true: np.ndarray, y_pred: np.ndarray,
                          y_prob: np.ndarray) -> dict:

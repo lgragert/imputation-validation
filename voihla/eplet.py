@@ -126,9 +126,18 @@ class EpletAnalysis:
             y_true = (truth_counts > 0).astype(int)
             y_prob = self.impute_data.get('pair_probability',
                                          np.ones(len(y_true)) * 0.5)
+            y_pred = (y_prob > 0.5).astype(int)
+            analysis_df = pd.DataFrame({
+                'ID': np.arange(len(y_true)),
+                'y_true': y_true,
+                'y_pred': y_pred,
+                'y_prob': y_prob,
+            })
 
-            results['calibration_plot'] = plotter.create_calibration_plot(
-                y_true, y_prob, 'Eplet Mismatch Calibration'
+            results['calibration_plot'] = plotter.calibration_plot(
+                analysis_results=analysis_df,
+                locus='eplet',
+                title='Eplet Mismatch Calibration'
             )
 
         return results
