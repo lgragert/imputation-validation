@@ -134,15 +134,118 @@ fig = plotter.calibration_plot(analysis_results=df, title=f'Calibration {locus}'
 ```
 
 ### Eplet-Level Analysis
-Still a work in progress, but you can use the following code to get simulated pairs for now.
+
+Eplet analysis requires an API key from the [EpRegistry](https://www.epregistry.com.br) if you do not already have the eplet mismatch lists. There are two classes: `MonteCarloEpletAnalysis` builds the input files by querying the EpRegistry API, and `EpletAnalysis` runs calibration analysis on the results.
+
+#### Step 1 — Build truth and imputed eplet tables (`MonteCarloEpletAnalysis`)
+
+`MonteCarloEpletAnalysis` takes a truth pairs file and an imputation pairs file and queries the EpRegistry API to produce eplet mismatch counts for both. The `PairProb` column in the imputed file comes from the product of the donor and recipient genotype frequencies in the imputation output (computed upstream by `DRDQ_pair_simulation.py`).
+
+The `which_impute` argument controls which locus is analyzed: `'DRDQ'`, `'DR'`, or `'DQ'`.
+
+Required columns in the **truth pairs file** (`{locus}_pairs_truth.csv`):
+- `DON_ID`, `REC_ID`, `DON_GLString`, `REC_GLString`
+
+Required columns in the **imputation pairs file** (`{locus}_pairs_imputation.csv`):
+- `DON_ID`, `REC_ID`, `PairProb_{locus}`, `DON_{locus}`, `REC_{locus}`
+
 ```python
 from voihla.eplet import MonteCarloEpletAnalysis
 
-eplet_analysis = MonteCarloEpletAnalysis(api_key='YOUR_API_KEY')
-pairs_df = eplet_analysis.create_random_pairs('truth_table.csv', n_pairs=100)
-results_df = eplet_analysis.analyze_eplet_mismatches(pairs_df)
-results_df.to_csv('DRDQ_eplet_lowres_impute100.csv', index=False)
+# Load API key from a local file (keep this out of version control)
+mc = MonteCarloEpletAnalysis.from_key_file('api.key')
+
+# Step 1 — sample n random pairs from the truth pairs file
+truth_pairs = mc.sample_pairs(
+    'DRDQ_pairs_truth.csv',
+    n_pairs=100,
+    save_path='DRDQ_pairs_truth_100.csv'
+)
+
+# Step 2 — query API with high-resolution truth genotypes -> truth eplet table
+truth_eplets = mc.build_truth_eplet_table(
+    truth_pairs,
+    which_impute='DRDQ',
+    save_path='DRDQ_eplet_truth_table100.csv'
+)
+
+# Step 3 — pull all imputation rows for those pairs out of the imputation file
+impute_rows = mc.get_imputation_rows(
+    'DRDQ_pairs_imputation.csv',
+    truth_pairs,
+    which_impute='DRDQ',
+    save_path='DRDQ_pairs_imputation_100.csv'
+)
+
+# Step 4 — query API with low-resolution imputed genotypes -> imputed eplet table
+impute_eplets = mc.build_impute_eplet_table(
+    impute_rows,
+    which_impute='DRDQ',
+    save_path='DRDQ_eplet_lowres_impute100.csv'
+)
 ```
+
+The API key can also be passed directly as a string:
+```python
+mc = MonteCarloEpletAnalysis(api_key='your-key-here')
+```
+
+#### Step 2 — Calibration analysis (`EpletAnalysis`)
+
+`EpletAnalysis` takes the truth eplet table and the imputed eplet table produced above and generates calibration plots for each locus present in both files. The imputed file must have a `PairProb_*` column — probabilities are aggregated by summing `PairProb` across all rows that share the same predicted eplet count for a given pair.
+
+```python
+from voihla.eplet import EpletAnalysis
+
+ea = EpletAnalysis(
+    truth_file='DRDQ_eplet_truth_table100.csv',
+    impute_file='DRDQ_eplet_lowres_impute100.csv',
+)
+
+plots = ea.run_calibration_analysis(n_bins=10)
+```
+
+After calling `run_calibration_analysis()`, results are stored on the instance:
+
+```python
+# Per-pair results: one row per donor-recipient pair
+# Columns: ID, y_true, y_pred, y_prob
+print(ea.pair_results['Total'])   # DRDQ combined
+print(ea.pair_results['DR'])
+print(ea.pair_results['DQ'])
+
+# Summary metrics per locus
+print(ea.summary_results['DR']['brier'])            # Brier score
+print(ea.summary_results['DR']['roc_auc'])          # ROC-AUC
+print(ea.summary_results['DR']['confusion_matrix']) # DataFrame: TN, FP, FN, TP
+```
+
+Save plots and results:
+```python
+import pandas as pd
+
+# Save calibration plots
+for name, fig in plots.items():
+    fig.savefig(f'{name}.png', bbox_inches='tight', dpi=150)
+
+# Save per-pair results to CSV
+for locus, df in ea.pair_results.items():
+    df.to_csv(f'eplet_pair_results_{locus}.csv', index=False)
+
+# Save summary metrics to CSV
+summary_rows = []
+for locus, metrics in ea.summary_results.items():
+    row = {'locus': locus, 'brier': metrics['brier'], 'roc_auc': metrics['roc_auc']}
+    row.update(metrics['confusion_matrix'].iloc[0].to_dict())
+    summary_rows.append(row)
+pd.DataFrame(summary_rows).to_csv('eplet_summary_results.csv', index=False)
+```
+
+`y_true` = 1 if the most probable predicted eplet count matches the true count, otherwise 0.
+
+`y_pred` = 1 if the probability of the top predicted count is ≥ 0.9, otherwise 0.
+
+`y_prob` = summed probability of the most probable predicted eplet count across all imputation samples for that pair.
 
 ### Output
 - Calibration plots saved as PNG files
