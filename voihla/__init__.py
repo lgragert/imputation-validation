@@ -1,6 +1,6 @@
 """HLA Imputation Validation Package."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from .analysis import SingleLocusAnalysis, MultiLocusAnalysis
 from .plotting import CalibrationPlotter
