@@ -42,13 +42,6 @@ class SingleLocusAnalysis:
             for i in range(len(self.truth_df)):
                 truth_allele = self.truth_df.loc[i, 'GLString'].split('^')[self.loci.index(locus)]
                 impute_allele = self.impute_df.loc[i, 'SLUG_GLString'].split('^')[self.loci.index(locus)]
-                truth_locus = truth_allele.split('*')[0]
-                impute_locus = impute_allele.split('*')[0]
-                # Only map DRB3/4/5/X to DRB345
-                if truth_locus.startswith('DRB3') or truth_locus.startswith('DRB4') or truth_locus.startswith('DRB5') or truth_locus.startswith('DRBX'):
-                    truth_allele = truth_allele.replace(truth_locus + '*', 'DRB345*')
-                if impute_locus.startswith('DRB3') or impute_locus.startswith('DRB4') or impute_locus.startswith('DRB5') or impute_locus.startswith('DRBX'):
-                    impute_allele = impute_allele.replace(impute_locus + '*', 'DRB345*')
                 truth_alleles = sorted(truth_allele.split('+'))
                 impute_alleles = sorted(impute_allele.split('+'))
                 y_true.append(1 if truth_alleles == impute_alleles else 0)
@@ -70,13 +63,6 @@ class SingleLocusAnalysis:
             for i in range(len(self.truth_df)):
                 truth_allele = self.truth_df.loc[i, 'GLString'].split('^')[self.loci.index(locus)]
                 impute_allele = self.impute_df.loc[i, 'SLUG_GLString'].split('^')[self.loci.index(locus)]
-                truth_locus = truth_allele.split('*')[0]
-                impute_locus = impute_allele.split('*')[0]
-                # Only map DRB3/4/5/X to DRB345
-                if truth_locus.startswith('DRB3') or truth_locus.startswith('DRB4') or truth_locus.startswith('DRB5') or truth_locus.startswith('DRBX'):
-                    truth_allele = truth_allele.replace(truth_locus + '*', 'DRB345*')
-                if impute_locus.startswith('DRB3') or impute_locus.startswith('DRB4') or impute_locus.startswith('DRB5') or impute_locus.startswith('DRBX'):
-                    impute_allele = impute_allele.replace(impute_locus + '*', 'DRB345*')
                 truth_alleles = sorted(truth_allele.split('+'))
                 impute_alleles = sorted(impute_allele.split('+'))
                 y_true.append(1 if truth_alleles == impute_alleles else 0)
@@ -123,13 +109,6 @@ class SingleLocusAnalysis:
         for i in range(len(self.truth_df)):
             truth_allele = self.truth_df.loc[i, 'GLString'].split('^')[self.loci.index(locus)]
             impute_allele = self.impute_df.loc[i, 'SLUG_GLString'].split('^')[self.loci.index(locus)]
-            truth_locus = truth_allele.split('*')[0]
-            impute_locus = impute_allele.split('*')[0]
-            # Only map DRB3/4/5/X to DRB345
-            if truth_locus.startswith('DRB3') or truth_locus.startswith('DRB4') or truth_locus.startswith('DRB5') or truth_locus.startswith('DRBX'):
-                truth_allele = truth_allele.replace(truth_locus + '*', 'DRB345*')
-            if impute_locus.startswith('DRB3') or impute_locus.startswith('DRB4') or impute_locus.startswith('DRB5') or impute_locus.startswith('DRBX'):
-                impute_allele = impute_allele.replace(impute_locus + '*', 'DRB345*')
             truth_alleles = sorted(truth_allele.split('+'))
             impute_alleles = sorted(impute_allele.split('+'))
             y_true.append(1 if truth_alleles == impute_alleles else 0)
@@ -179,16 +158,7 @@ class MultiLocusAnalysis:
         return types
 
     def _normalize_glstring(self, glstring):
-        """Map DRB3/4/5/X loci to DRB345 in a GLString."""
-        alleles = glstring.split('^')
-        norm_alleles = []
-        for allele in alleles:
-            locus = allele.split('*')[0]
-            if locus.startswith('DRB3') or locus.startswith('DRB4') or locus.startswith('DRB5') or locus.startswith('DRBX'):
-                norm_alleles.append(allele.replace(locus + '*', 'DRB345*'))
-            else:
-                norm_alleles.append(allele)
-        return '^'.join(norm_alleles)
+        return glstring
 
     def _get_loci_for_analysis_type(self, analysis_type):
         # Map analysis type to loci
@@ -210,7 +180,7 @@ class MultiLocusAnalysis:
         for allele in alleles:
             locus = allele.split('*')[0]
             if locus.startswith('DRB3') or locus.startswith('DRB4') or locus.startswith('DRB5') or locus.startswith('DRBX'):
-                drb345_alleles.append(allele.replace(locus + '*', 'DRB345*'))
+                drb345_alleles.append(allele)
             else:
                 locus_map[locus] = allele
         if drb345_alleles:
